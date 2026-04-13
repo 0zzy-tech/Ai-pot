@@ -1,12 +1,25 @@
 """
 AI Honeypot — main entry point.
 
-Masquerades as a real Ollama server on port 11434.
+Masquerades as multiple AI API servers simultaneously on port 11434.
+Simulated platforms:
+  - Ollama (native + OpenAI-compatible)
+  - Anthropic Claude API
+  - HuggingFace Text Generation Inference (TGI)
+  - llama.cpp HTTP server
+  - Text Generation WebUI (oobabooga)
+  - Cohere API
+  - Mistral AI API
+  - Google Gemini / Generative AI API
+  - Stable Diffusion WebUI (Automatic1111 / FORGE)
+  - ComfyUI
+  - LocalAI (audio, image generation extensions)
+
 Every incoming request is:
-  1. Forwarded to the appropriate fake-response handler
+  1. Forwarded to the matching fake-response handler
   2. Logged asynchronously (classify + geolocate + SQLite + WebSocket broadcast)
 
-Dashboard is at /__admin (HTTP Basic Auth required).
+Dashboard at /__admin (HTTP Basic Auth).
 """
 
 import asyncio
@@ -19,7 +32,22 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
 from app.logger import log_request
-from app.routes import dashboard, ollama, openai_compat, websocket
+from app.routes import (
+    anthropic,
+    comfyui,
+    cohere,
+    dashboard,
+    gemini,
+    huggingface,
+    llamacpp,
+    localai_ext,
+    mistral,
+    ollama,
+    openai_compat,
+    stablediffusion,
+    textgenwebui,
+    websocket,
+)
 from config import Config
 
 logging.basicConfig(
@@ -34,7 +62,9 @@ async def lifespan(app: FastAPI):
     logger.info("Initialising database…")
     await init_db()
     logger.info(
-        "AI Honeypot running on %s:%d  |  Dashboard: http://localhost:%d/__admin",
+        "AI Honeypot running on %s:%d  |  Dashboard: http://localhost:%d/__admin\n"
+        "  Simulating: Ollama · Anthropic · HuggingFace TGI · llama.cpp · "
+        "Text-Gen-WebUI · Cohere · Mistral · Gemini · SD-WebUI · ComfyUI · LocalAI",
         Config.HOST,
         Config.PORT,
         Config.PORT,
@@ -56,9 +86,46 @@ app = FastAPI(
 # Static files (dashboard assets)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# ── Routers ────────────────────────────────────────────────────────────────────
+# Order matters: more specific routes first to avoid prefix conflicts.
+
+# Ollama native API (port 11434 default)
 app.include_router(ollama.router)
+
+# OpenAI-compatible layer (/v1/*)  — shared by Ollama, LocalAI, vLLM, LM Studio…
 app.include_router(openai_compat.router)
+
+# Anthropic Claude API (/v1/messages, /v1/complete)
+app.include_router(anthropic.router)
+
+# HuggingFace TGI (/generate, /generate_stream, /info, /metrics…)
+app.include_router(huggingface.router)
+
+# llama.cpp HTTP server (/completion, /embedding, /slots, /infill…)
+app.include_router(llamacpp.router)
+
+# Text Generation WebUI / oobabooga (/api/v1/*)
+app.include_router(textgenwebui.router)
+
+# Cohere API (/v1/chat, /v1/generate, /v1/embed, /v1/rerank…)
+app.include_router(cohere.router)
+
+# Mistral AI (/v1/fim/completions, /v1/agents…)
+app.include_router(mistral.router)
+
+# Google Gemini / Vertex AI (/v1beta/models/*, /v1/models/*)
+app.include_router(gemini.router)
+
+# Stable Diffusion WebUI (/sdapi/v1/*, /info)
+app.include_router(stablediffusion.router)
+
+# ComfyUI (/prompt, /system_stats, /queue, /history, /view…)
+app.include_router(comfyui.router)
+
+# LocalAI extensions beyond /v1/ (audio, image gen, TTS, backends)
+app.include_router(localai_ext.router)
+
+# Dashboard and WebSocket
 app.include_router(dashboard.router)
 app.include_router(websocket.router)
 
