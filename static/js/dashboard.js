@@ -119,7 +119,7 @@
       card.innerHTML = `
         <div class="service-icon">${esc(svc.icon)}</div>
         <div class="service-info">
-          <div class="service-name">${esc(svc.label)}</div>
+          <div class="service-name">${esc(svc.label)}<span class="service-port">:${esc(String(svc.port))}</span></div>
           <div class="service-desc">${esc(svc.description)}</div>
         </div>
         <div class="toggle-wrap">

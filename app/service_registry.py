@@ -26,6 +26,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Ollama",
         "description": "Native Ollama REST API — the most targeted AI endpoint",
         "icon":        "🦙",
+        "port":        11434,
         "prefixes":    ["/api/"],
         "exact":       ["/"],
     },
@@ -33,6 +34,7 @@ SERVICES: dict[str, dict] = {
         "label":       "OpenAI Compatible",
         "description": "OpenAI /v1/ layer (LangChain, LlamaIndex, Open WebUI…)",
         "icon":        "🤖",
+        "port":        11434,
         "prefixes":    [],
         "exact":       [
             "/v1/models", "/v1/chat/completions",
@@ -43,6 +45,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Anthropic Claude",
         "description": "Claude Messages API — /v1/messages streaming",
         "icon":        "🧠",
+        "port":        443,
         "prefixes":    [],
         "exact":       ["/v1/messages", "/v1/complete"],
     },
@@ -50,6 +53,7 @@ SERVICES: dict[str, dict] = {
         "label":       "HuggingFace TGI",
         "description": "Text Generation Inference server",
         "icon":        "🤗",
+        "port":        8080,
         "prefixes":    [],
         "exact":       [
             "/generate", "/generate_stream", "/info",
@@ -60,6 +64,7 @@ SERVICES: dict[str, dict] = {
         "label":       "llama.cpp",
         "description": "llama.cpp HTTP server — native C++ backend",
         "icon":        "⚙️",
+        "port":        8080,
         "prefixes":    [],
         "exact":       [
             "/completion", "/embedding", "/slots",
@@ -70,6 +75,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Text Gen WebUI",
         "description": "oobabooga text-generation-webui",
         "icon":        "💬",
+        "port":        7860,
         "prefixes":    ["/api/v1/"],
         "exact":       [],
     },
@@ -77,6 +83,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Cohere",
         "description": "Cohere generate, embed, rerank & classify",
         "icon":        "🎯",
+        "port":        443,
         "prefixes":    [],
         "exact":       [
             "/v1/chat", "/v1/generate", "/v1/embed",
@@ -88,6 +95,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Mistral AI",
         "description": "Mistral FIM code completion and Agents API",
         "icon":        "🌊",
+        "port":        443,
         "prefixes":    [],
         "exact":       [
             "/v1/fim/completions",
@@ -98,6 +106,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Google Gemini",
         "description": "Google Generative AI / Vertex AI REST API",
         "icon":        "✨",
+        "port":        443,
         "prefixes":    ["/v1beta/"],
         "exact":       [],
     },
@@ -105,6 +114,7 @@ SERVICES: dict[str, dict] = {
         "label":       "Stable Diffusion",
         "description": "Automatic1111 / FORGE WebUI image generation",
         "icon":        "🎨",
+        "port":        7860,
         "prefixes":    ["/sdapi/"],
         "exact":       [],
     },
@@ -112,6 +122,7 @@ SERVICES: dict[str, dict] = {
         "label":       "ComfyUI",
         "description": "ComfyUI node-based image generation pipeline",
         "icon":        "🎭",
+        "port":        8188,
         "prefixes":    ["/history/", "/object_info/"],
         "exact":       [
             "/system_stats", "/object_info", "/queue",
@@ -122,6 +133,7 @@ SERVICES: dict[str, dict] = {
         "label":       "LocalAI",
         "description": "LocalAI audio, TTS and image generation extensions",
         "icon":        "🏠",
+        "port":        8080,
         "prefixes":    [],
         "exact":       [
             "/readyz", "/healthz", "/tts",
@@ -220,6 +232,7 @@ def get_all_service_states() -> list[dict]:
             "label":       defn["label"],
             "description": defn["description"],
             "icon":        defn["icon"],
+            "port":        defn["port"],
             "enabled":     _enabled_cache.get(sid, True),
         }
         for sid, defn in SERVICES.items()
