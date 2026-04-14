@@ -128,17 +128,26 @@ async def capture_all_requests(request: Request, call_next):
     request._receive = receive  # type: ignore[attr-defined]
 
     path = request.url.path
+    client_ip = request.client.host if request.client else ""
+
+    # ── Skip logging for internal/dashboard/healthcheck traffic ───────────
+    _skip = (
+        path.startswith(("/__admin", "/static", "/ws", "/favicon"))
+        or client_ip == "127.0.0.1"
+    )
 
     # ── Service gate ───────────────────────────────────────────────────────
     if not service_registry.is_path_enabled(path):
         # Log the blocked attempt then return 404 (attacker sees nothing there)
-        asyncio.create_task(log_request(request, body, 404))
+        if not _skip:
+            asyncio.create_task(log_request(request, body, 404))
         return Response(status_code=404)
 
     response = await call_next(request)
 
     # Fire-and-forget logging
-    asyncio.create_task(log_request(request, body, response.status_code))
+    if not _skip:
+        asyncio.create_task(log_request(request, body, response.status_code))
 
     return response
 
