@@ -269,6 +269,29 @@ async def set_ip_cache(ip: str, geo: dict) -> None:
             await db.commit()
 
 
+async def get_requests_for_export(prefixes: list, exact_paths: list) -> list:
+    conditions: list = []
+    params: list = []
+    for p in exact_paths:
+        conditions.append("path = ?")
+        params.append(p)
+    for p in prefixes:
+        conditions.append("path LIKE ?")
+        params.append(p.rstrip("/") + "/%")
+        conditions.append("path = ?")
+        params.append(p.rstrip("/"))
+    where = ("WHERE " + " OR ".join(conditions)) if conditions else ""
+    sql = f"""
+        SELECT timestamp, ip, method, path, category, risk_level,
+               user_agent, country, city, asn, flagged_patterns, body
+        FROM requests {where}
+        ORDER BY timestamp DESC
+    """
+    async with get_db() as db:
+        rows = await (await db.execute(sql, params)).fetchall()
+    return [dict(r) for r in rows]
+
+
 async def count_recent_requests(ip: str, window_secs: int) -> int:
     async with get_db() as db:
         cur = await db.execute(

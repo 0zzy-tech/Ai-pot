@@ -132,6 +132,10 @@
           <span class="toggle-label" id="svc-label-${esc(svc.id)}">
             ${svc.enabled ? 'ON' : 'OFF'}
           </span>
+          <a class="export-link"
+             href="${ADMIN_PREFIX}/api/export/${esc(svc.id)}.csv"
+             title="Export ${esc(svc.label)} logs as CSV"
+             download>⬇ CSV</a>
         </div>
       `;
       grid.appendChild(card);
@@ -242,6 +246,14 @@
     loadInitialFeed();
     loadMapData();
     loadServices();
+
+    document.getElementById('reset-services-btn')?.addEventListener('click', () => {
+      if (!confirm('Reset all services to enabled?')) return;
+      fetch(`${ADMIN_PREFIX}/api/services/reset`, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => loadServices())
+        .catch(console.warn);
+    });
 
     setInterval(refreshStats, 30000);
 

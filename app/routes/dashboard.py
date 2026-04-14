@@ -8,17 +8,20 @@ Dashboard routes:
   POST /__admin/api/services/{service_id}/toggle — enable/disable a service
 """
 
+import csv
+import io
 import secrets
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from app import service_registry
 from app.broadcaster import manager
-from app.database import get_map_data, get_requests, get_stats
+from app.database import get_map_data, get_requests, get_requests_for_export, get_stats
 from config import Config
 
 router = APIRouter(prefix=Config.ADMIN_PREFIX)
@@ -86,6 +89,42 @@ async def api_map_data(_: str = Depends(_check_auth)):
 async def api_get_services(_: str = Depends(_check_auth)):
     """Return all service definitions with their current enabled state."""
     return JSONResponse(content=service_registry.get_all_service_states())
+
+
+@router.get("/api/export/{service_id}.csv")
+async def export_service_csv(service_id: str, _: str = Depends(_check_auth)):
+    """Download all requests for a specific honeypot service as a CSV file."""
+    if service_id not in service_registry.SERVICES:
+        raise HTTPException(status_code=404, detail=f"Unknown service: {service_id!r}")
+    defn = service_registry.SERVICES[service_id]
+    rows = await get_requests_for_export(defn["prefixes"], defn["exact"])
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=[
+        "timestamp", "ip", "method", "path", "category", "risk_level",
+        "user_agent", "country", "city", "asn", "flagged_patterns", "body",
+    ])
+    writer.writeheader()
+    writer.writerows(rows)
+
+    filename = (
+        f"honeypot_{service_id}_"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/api/services/reset")
+async def api_reset_services(_: str = Depends(_check_auth)):
+    """Re-enable all honeypot services and broadcast the change to all dashboard clients."""
+    await service_registry.reset_all_services()
+    for sid in service_registry.SERVICES:
+        await manager.broadcast({"type": "service_update", "data": {"id": sid, "enabled": True}})
+    return JSONResponse(content={"reset": True})
 
 
 @router.post("/api/services/{service_id}/toggle")

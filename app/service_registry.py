@@ -202,6 +202,19 @@ async def init_service_registry() -> None:
     )
 
 
+async def reset_all_services() -> None:
+    """Re-enable all services — updates cache immediately and clears persisted states."""
+    for sid in SERVICES:
+        _enabled_cache[sid] = True
+
+    from app.database import get_db, _write_lock
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute("DELETE FROM service_states")
+            await db.commit()
+    logger.info("All services reset to enabled")
+
+
 async def set_service_enabled(service_id: str, enabled: bool) -> None:
     """Toggle a service on/off — updates cache immediately, persists to DB."""
     if service_id not in SERVICES:
