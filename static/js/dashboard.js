@@ -148,22 +148,9 @@
   }
 
   function exportCsv(serviceId) {
-    fetch(`${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Export failed: ${r.status}`);
-        return r.blob();
-      })
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `honeypot_${serviceId}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      })
-      .catch(err => alert('Export failed: ' + err.message));
+    // Use navigation (not fetch) so the browser sends cached Basic Auth credentials.
+    // Content-Disposition: attachment on the server side triggers a download without leaving the page.
+    window.location.href = `${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`;
   }
 
   function applyServiceUpdate(id, enabled) {
