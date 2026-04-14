@@ -269,6 +269,13 @@ async def set_ip_cache(ip: str, geo: dict) -> None:
             await db.commit()
 
 
+async def clear_all_requests() -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute("DELETE FROM requests")
+            await db.commit()
+
+
 async def get_requests_for_export(prefixes: list, exact_paths: list) -> list:
     conditions: list = []
     params: list = []

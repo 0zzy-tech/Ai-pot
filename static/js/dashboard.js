@@ -132,10 +132,7 @@
           <span class="toggle-label" id="svc-label-${esc(svc.id)}">
             ${svc.enabled ? 'ON' : 'OFF'}
           </span>
-          <a class="export-link"
-             href="${ADMIN_PREFIX}/api/export/${esc(svc.id)}.csv"
-             title="Export ${esc(svc.label)} logs as CSV"
-             download>⬇ CSV</a>
+          <button class="export-link" data-export-id="${esc(svc.id)}" title="Export ${esc(svc.label)} logs as CSV">⬇ CSV</button>
         </div>
       `;
       grid.appendChild(card);
@@ -143,7 +140,30 @@
       // Wire up toggle
       const input = card.querySelector('input[type=checkbox]');
       input.addEventListener('change', () => toggleService(svc.id, input));
+
+      // Wire up CSV export (fetch+blob so Basic Auth credentials are sent)
+      const exportBtn = card.querySelector('[data-export-id]');
+      exportBtn.addEventListener('click', () => exportCsv(svc.id));
     });
+  }
+
+  function exportCsv(serviceId) {
+    fetch(`${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`)
+      .then(r => {
+        if (!r.ok) throw new Error(`Export failed: ${r.status}`);
+        return r.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `honeypot_${serviceId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(err => alert('Export failed: ' + err.message));
   }
 
   function applyServiceUpdate(id, enabled) {
@@ -252,6 +272,18 @@
       fetch(`${ADMIN_PREFIX}/api/services/reset`, { method: 'POST' })
         .then(r => r.json())
         .then(() => loadServices())
+        .catch(console.warn);
+    });
+
+    document.getElementById('clear-data-btn')?.addEventListener('click', () => {
+      if (!confirm('Delete ALL request data? This cannot be undone.')) return;
+      fetch(`${ADMIN_PREFIX}/api/requests/clear`, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+          document.getElementById('feed-tbody').innerHTML = '';
+          refreshStats();
+          loadMapData();
+        })
         .catch(console.warn);
     });
 

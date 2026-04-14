@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import service_registry
 from app.broadcaster import manager
-from app.database import get_map_data, get_requests, get_requests_for_export, get_stats
+from app.database import clear_all_requests, get_map_data, get_requests, get_requests_for_export, get_stats
 from config import Config
 
 router = APIRouter(prefix=Config.ADMIN_PREFIX)
@@ -89,6 +89,13 @@ async def api_map_data(_: str = Depends(_check_auth)):
 async def api_get_services(_: str = Depends(_check_auth)):
     """Return all service definitions with their current enabled state."""
     return JSONResponse(content=service_registry.get_all_service_states())
+
+
+@router.post("/api/requests/clear")
+async def api_clear_requests(_: str = Depends(_check_auth)):
+    """Delete all logged request data from the database."""
+    await clear_all_requests()
+    return JSONResponse(content={"cleared": True})
 
 
 @router.get("/api/export/{service_id}.csv")

@@ -102,6 +102,8 @@ header h1 span { color: var(--risk-critical); }
   letter-spacing: 0.5px;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
