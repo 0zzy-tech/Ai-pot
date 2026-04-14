@@ -110,56 +110,77 @@ app.include_router(websocket.router)
 
 
 # ── Global capture + service-gate middleware ──────────────────────────────────
-@app.middleware("http")
-async def capture_all_requests(request: Request, call_next):
+# Raw ASGI middleware — avoids BaseHTTPMiddleware entirely.
+# BaseHTTPMiddleware (used by @app.middleware("http")) has a known bug in
+# Starlette 0.40+ where it calls receive() after a StreamingResponse starts
+# sending and raises RuntimeError if it gets http.request instead of
+# http.disconnect — breaking CSV exports and any other streaming endpoint.
+
+class _CaptureMiddleware:
     """
-    1. Reads the request body (needed for logging).
-    2. Checks whether the targeted service is enabled.
-       - If disabled: logs the attempt as status 503 and returns 404.
-       - If enabled: forwards to the handler normally.
-    3. Logs every request asynchronously (never delays the response).
+    1. Buffers the full request body (needed for logging).
+    2. Service-gates disabled services → 404.
+    3. Logs every non-internal request asynchronously.
     """
-    body = await request.body()
+    def __init__(self, app):
+        self._app = app
 
-    # Re-inject body so downstream handlers can read it.
-    # Must be stateful: return http.request once, then http.disconnect.
-    # BaseHTTPMiddleware calls receive() again after a StreamingResponse
-    # starts and expects http.disconnect — always returning http.request
-    # raises a RuntimeError inside Starlette.
-    _consumed = False
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
 
-    async def receive():
-        nonlocal _consumed
-        if not _consumed:
-            _consumed = True
-            return {"type": "http.request", "body": body, "more_body": False}
-        return {"type": "http.disconnect"}
+        # Buffer the full request body from the real ASGI receive
+        chunks = []
+        more = True
+        while more:
+            msg = await receive()
+            chunks.append(msg.get("body", b""))
+            more = msg.get("more_body", False)
+        body = b"".join(chunks)
 
-    request._receive = receive  # type: ignore[attr-defined]
+        # Stateful replay: downstream handlers get the body once, then disconnect
+        _done = False
+        async def replay_receive():
+            nonlocal _done
+            if not _done:
+                _done = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return {"type": "http.disconnect"}
 
-    path = request.url.path
-    client_ip = request.client.host if request.client else ""
+        path  = scope.get("path", "")
+        client = scope.get("client") or ("unknown", 0)
+        client_ip = client[0]
 
-    # ── Skip logging for internal/dashboard/healthcheck traffic ───────────
-    _skip = (
-        path.startswith(("/__admin", "/static", "/ws", "/favicon"))
-        or client_ip == "127.0.0.1"
-    )
+        skip = (
+            path.startswith(("/__admin", "/static", "/ws", "/favicon"))
+            or client_ip == "127.0.0.1"
+        )
 
-    # ── Service gate ───────────────────────────────────────────────────────
-    if not service_registry.is_path_enabled(path):
-        # Log the blocked attempt then return 404 (attacker sees nothing there)
-        if not _skip:
-            asyncio.create_task(log_request(request, body, 404))
-        return Response(status_code=404)
+        # Service gate
+        if not service_registry.is_path_enabled(path):
+            if not skip:
+                req = Request(scope)
+                asyncio.create_task(log_request(req, body, 404))
+            await send({"type": "http.response.start", "status": 404, "headers": []})
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
 
-    response = await call_next(request)
+        # Capture the response status code for logging
+        captured_status = [200]
+        async def capturing_send(msg):
+            if msg["type"] == "http.response.start":
+                captured_status[0] = msg["status"]
+            await send(msg)
 
-    # Fire-and-forget logging
-    if not _skip:
-        asyncio.create_task(log_request(request, body, response.status_code))
+        await self._app(scope, replay_receive, capturing_send)
 
-    return response
+        if not skip:
+            req = Request(scope)
+            asyncio.create_task(log_request(req, body, captured_status[0]))
+
+
+app.add_middleware(_CaptureMiddleware)
 
 
 if __name__ == "__main__":
