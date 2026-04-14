@@ -16,12 +16,12 @@
 
 services:
   honeypot:
-    # Use pre-built image from GitHub Container Registry
-    image: ghcr.io/0zzy-tech/ai-pot:latest
-    # OR build locally (comment out `image:` above and uncomment below):
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
+    # Build locally from source
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # OR pull pre-built image from GitHub Container Registry (requires image to be published):
+    # image: ghcr.io/0zzy-tech/ai-pot:latest
 
     container_name: ai-honeypot
 
