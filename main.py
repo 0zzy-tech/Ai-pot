@@ -173,7 +173,11 @@ class _CaptureMiddleware:
                 captured_status[0] = msg["status"]
             await send(msg)
 
-        await self._app(scope, replay_receive, capturing_send)
+        try:
+            await self._app(scope, replay_receive, capturing_send)
+        except Exception:
+            logger.exception("Unhandled error in ASGI app for path %s", path)
+            raise
 
         if not skip:
             req = Request(scope)

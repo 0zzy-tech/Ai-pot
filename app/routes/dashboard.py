@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
@@ -118,8 +118,8 @@ async def export_service_csv(service_id: str, _: str = Depends(_check_auth)):
         f"honeypot_{service_id}_"
         f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     )
-    return StreamingResponse(
-        iter([buf.getvalue()]),
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
