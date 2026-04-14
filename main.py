@@ -121,9 +121,19 @@ async def capture_all_requests(request: Request, call_next):
     """
     body = await request.body()
 
-    # Re-inject body so downstream handlers can read it
+    # Re-inject body so downstream handlers can read it.
+    # Must be stateful: return http.request once, then http.disconnect.
+    # BaseHTTPMiddleware calls receive() again after a StreamingResponse
+    # starts and expects http.disconnect — always returning http.request
+    # raises a RuntimeError inside Starlette.
+    _consumed = False
+
     async def receive():
-        return {"type": "http.request", "body": body}
+        nonlocal _consumed
+        if not _consumed:
+            _consumed = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
 
     request._receive = receive  # type: ignore[attr-defined]
 
