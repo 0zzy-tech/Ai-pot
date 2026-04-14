@@ -1,0 +1,73 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AI Honeypot — Docker Compose
+#
+# Quick start:
+#   docker compose up -d
+#
+# Change the admin password before exposing to the internet:
+#   ADMIN_PASSWORD=supersecret docker compose up -d
+#
+# View logs:
+#   docker compose logs -f
+#
+# Dashboard:
+#   http://<host-ip>:11434/__admin
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  honeypot:
+    # Use pre-built image from GitHub Container Registry
+    image: ghcr.io/0zzy-tech/ai-pot:latest
+    # OR build locally (comment out `image:` above and uncomment below):
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+
+    container_name: ai-honeypot
+
+    ports:
+      # Expose on the host as the real Ollama port — key for honeypot effectiveness
+      - "${HOST_PORT:-11434}:11434"
+
+    volumes:
+      # Named volume keeps the SQLite database across restarts
+      - honeypot-data:/data
+
+    environment:
+      # ── Required: change ADMIN_PASSWORD before deploying ────────────────
+      ADMIN_PASSWORD:   ${ADMIN_PASSWORD:-changeme}
+      ADMIN_USERNAME:   ${ADMIN_USERNAME:-admin}
+
+      # ── Optional tuning ──────────────────────────────────────────────────
+      PORT:             "11434"
+      DB_PATH:          "/data/honeypot.db"
+      ADMIN_PREFIX:     "/__admin"
+      MAX_REQUESTS_STORED: "100000"
+      STREAM_WORD_DELAY_SECS: "0.04"
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:11434/')"]
+      interval: 30s
+      timeout:  5s
+      retries:  3
+      start_period: 15s
+
+    # Resource limits — comfortable on Raspberry Pi 4 (2 GB model)
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus:   "0.8"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  honeypot-data:
+    driver: local

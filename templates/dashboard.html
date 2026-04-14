@@ -13,16 +13,16 @@
   <link rel="stylesheet" href="/static/css/dashboard.css">
 
   <script>
-    // Make admin prefix available to JS before scripts load
     window.ADMIN_PREFIX = "{{ admin_prefix }}";
   </script>
 </head>
 <body>
 <div class="app">
 
-  <!-- ── Header ────────────────────────────────────────────────────────── -->
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
   <header>
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f85149" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f85149"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
     </svg>
     <h1>AI <span>HONEYPOT</span> MONITOR</h1>
@@ -32,7 +32,7 @@
     </div>
   </header>
 
-  <!-- ── Stats bar ─────────────────────────────────────────────────────── -->
+  <!-- ── Stats bar ──────────────────────────────────────────────────── -->
   <div class="stats-bar">
     <div class="stat-card">
       <span class="label">Total Requests</span>
@@ -64,7 +64,7 @@
     </div>
   </div>
 
-  <!-- ── Main grid ──────────────────────────────────────────────────────── -->
+  <!-- ── Main grid ──────────────────────────────────────────────────── -->
   <div class="main-grid">
 
     <!-- World map -->
@@ -95,41 +95,52 @@
 
     <!-- Charts row -->
     <div id="charts-row">
-
-      <!-- Risk doughnut -->
       <div class="panel">
         <div class="panel-header">Risk Levels</div>
         <div style="flex:1; padding:12px; position:relative;">
           <canvas id="risk-chart"></canvas>
         </div>
       </div>
-
-      <!-- Category bar -->
       <div class="panel">
         <div class="panel-header">Request Categories</div>
         <div style="flex:1; padding:12px; position:relative;">
           <canvas id="category-chart"></canvas>
         </div>
       </div>
-
-      <!-- 24h timeline -->
       <div class="panel">
         <div class="panel-header">24-Hour Activity</div>
         <div style="flex:1; padding:12px; position:relative;">
           <canvas id="timeline-chart"></canvas>
         </div>
       </div>
-
-    </div><!-- /charts-row -->
+    </div>
 
   </div><!-- /main-grid -->
 
-  <!-- ── Footer ────────────────────────────────────────────────────────── -->
+  <!-- ── Services panel ─────────────────────────────────────────────── -->
+  <div id="services-section">
+    <div class="services-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+      Simulated Platforms
+      <span style="margin-left:auto; font-size:11px; font-weight:400; color:var(--text-muted)">
+        Toggle to enable / disable each honeypot service
+      </span>
+    </div>
+    <div class="services-grid" id="services-grid">
+      <!-- Populated by dashboard.js -->
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────── -->
   <footer>
     <span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-      </svg>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2"><circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/></svg>
       <span id="footer-time">00:00:00</span>
     </span>
     <span>Port 11434 &mdash; Ollama Honeypot</span>
@@ -140,15 +151,10 @@
 
 </div><!-- /app -->
 
-<!-- ── Scripts ──────────────────────────────────────────────────────────── -->
-<!-- Leaflet JS -->
+<!-- ── Scripts ─────────────────────────────────────────────────────────── -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/sp38=" crossorigin="anonymous"></script>
-
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-
-<!-- App scripts -->
 <script src="/static/js/map.js"></script>
 <script src="/static/js/charts.js"></script>
 <script src="/static/js/dashboard.js"></script>

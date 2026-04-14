@@ -59,6 +59,11 @@ async def init_db() -> None:
                 asn        TEXT,
                 cached_at  TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS service_states (
+                name     TEXT PRIMARY KEY,
+                enabled  INTEGER NOT NULL DEFAULT 1
+            );
         """)
         await db.commit()
 

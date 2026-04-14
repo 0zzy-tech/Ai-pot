@@ -16,8 +16,9 @@ Simulated platforms:
   - LocalAI (audio, image generation extensions)
 
 Every incoming request is:
-  1. Forwarded to the matching fake-response handler
-  2. Logged asynchronously (classify + geolocate + SQLite + WebSocket broadcast)
+  1. Service-gate checked (disabled services return 404 but are still logged)
+  2. Forwarded to the matching fake-response handler
+  3. Logged asynchronously (classify + geolocate + SQLite + WebSocket broadcast)
 
 Dashboard at /__admin (HTTP Basic Auth).
 """
@@ -27,11 +28,12 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
 from app.logger import log_request
+from app import service_registry
 from app.routes import (
     anthropic,
     comfyui,
@@ -61,13 +63,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Initialising database…")
     await init_db()
+    await service_registry.init_service_registry()
     logger.info(
-        "AI Honeypot running on %s:%d  |  Dashboard: http://localhost:%d/__admin\n"
+        "AI Honeypot running on %s:%d  |  Dashboard: http://localhost:%d%s\n"
         "  Simulating: Ollama · Anthropic · HuggingFace TGI · llama.cpp · "
         "Text-Gen-WebUI · Cohere · Mistral · Gemini · SD-WebUI · ComfyUI · LocalAI",
         Config.HOST,
         Config.PORT,
         Config.PORT,
+        Config.ADMIN_PREFIX,
     )
     yield
     logger.info("Shutting down.")
@@ -89,53 +93,31 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # ── Routers ────────────────────────────────────────────────────────────────────
 # Order matters: more specific routes first to avoid prefix conflicts.
 
-# Ollama native API (port 11434 default)
 app.include_router(ollama.router)
-
-# OpenAI-compatible layer (/v1/*)  — shared by Ollama, LocalAI, vLLM, LM Studio…
 app.include_router(openai_compat.router)
-
-# Anthropic Claude API (/v1/messages, /v1/complete)
 app.include_router(anthropic.router)
-
-# HuggingFace TGI (/generate, /generate_stream, /info, /metrics…)
 app.include_router(huggingface.router)
-
-# llama.cpp HTTP server (/completion, /embedding, /slots, /infill…)
 app.include_router(llamacpp.router)
-
-# Text Generation WebUI / oobabooga (/api/v1/*)
 app.include_router(textgenwebui.router)
-
-# Cohere API (/v1/chat, /v1/generate, /v1/embed, /v1/rerank…)
 app.include_router(cohere.router)
-
-# Mistral AI (/v1/fim/completions, /v1/agents…)
 app.include_router(mistral.router)
-
-# Google Gemini / Vertex AI (/v1beta/models/*, /v1/models/*)
 app.include_router(gemini.router)
-
-# Stable Diffusion WebUI (/sdapi/v1/*, /info)
 app.include_router(stablediffusion.router)
-
-# ComfyUI (/prompt, /system_stats, /queue, /history, /view…)
 app.include_router(comfyui.router)
-
-# LocalAI extensions beyond /v1/ (audio, image gen, TTS, backends)
 app.include_router(localai_ext.router)
-
-# Dashboard and WebSocket
 app.include_router(dashboard.router)
 app.include_router(websocket.router)
 
 
-# ── Global capture middleware ─────────────────────────────────────────────────
+# ── Global capture + service-gate middleware ──────────────────────────────────
 @app.middleware("http")
 async def capture_all_requests(request: Request, call_next):
     """
-    Captures EVERY request (including unknown paths → 404s) for logging.
-    Logging is a background task so it never delays the response.
+    1. Reads the request body (needed for logging).
+    2. Checks whether the targeted service is enabled.
+       - If disabled: logs the attempt as status 503 and returns 404.
+       - If enabled: forwards to the handler normally.
+    3. Logs every request asynchronously (never delays the response).
     """
     body = await request.body()
 
@@ -145,9 +127,17 @@ async def capture_all_requests(request: Request, call_next):
 
     request._receive = receive  # type: ignore[attr-defined]
 
+    path = request.url.path
+
+    # ── Service gate ───────────────────────────────────────────────────────
+    if not service_registry.is_path_enabled(path):
+        # Log the blocked attempt then return 404 (attacker sees nothing there)
+        asyncio.create_task(log_request(request, body, 404))
+        return Response(status_code=404)
+
     response = await call_next(request)
 
-    # Fire-and-forget: log asynchronously
+    # Fire-and-forget logging
     asyncio.create_task(log_request(request, body, response.status_code))
 
     return response

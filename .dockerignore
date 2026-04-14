@@ -1,0 +1,54 @@
+# Version control
+.git
+.gitignore
+
+# Python cache & build artefacts
+__pycache__
+*.py[cod]
+*.pyo
+*.egg-info
+dist
+build
+.eggs
+
+# Virtual environment
+venv
+.venv
+env
+
+# Database (runtime data — never bake into image)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets / environment files
+.env
+.env.*
+
+# CI / GitHub Actions
+.github
+
+# Docker files (not needed inside the image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Deployment helpers (not needed in image)
+setup.sh
+ai-honeypot.service
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Test files
+tests
+test_*
+*_test.py
