@@ -1,0 +1,38 @@
+[Unit]
+Description=AI Honeypot — fake Ollama server with dashboard
+Documentation=https://github.com/0zzy-tech/Ai-pot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/ai-honeypot
+
+# Use the venv created by setup.sh
+ExecStart=/home/pi/ai-honeypot/venv/bin/python main.py
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-honeypot
+
+# Resource limits (Raspberry Pi safe)
+MemoryMax=256M
+CPUQuota=50%
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/pi/ai-honeypot
+
+[Install]
+WantedBy=multi-user.target

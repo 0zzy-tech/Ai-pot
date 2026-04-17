@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Honeypot Monitor</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+
+  <script>
+    window.ADMIN_PREFIX = "{{ admin_prefix }}";
+  </script>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <header>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f85149"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <h1>AI <span>HONEYPOT</span> MONITOR</h1>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <a href="{{ admin_prefix }}/api/report.html" class="btn-reset" style="text-decoration:none; font-size:11px">⬇ Threat Report</a>
+      <div id="live-dot" class="live-dot offline"></div>
+      <span id="live-label" class="live-label">CONNECTING…</span>
+    </div>
+  </header>
+
+  <!-- ── Stats bar ──────────────────────────────────────────────────── -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <span class="label">Total Requests</span>
+      <span class="value" id="stat-total">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="label">Last 24h</span>
+      <span class="value" id="stat-24h">0</span>
+    </div>
+    <div class="stat-card critical">
+      <span class="label">Critical</span>
+      <span class="value" id="stat-critical">0</span>
+    </div>
+    <div class="stat-card high">
+      <span class="label">High</span>
+      <span class="value" id="stat-high">0</span>
+    </div>
+    <div class="stat-card medium">
+      <span class="label">Medium</span>
+      <span class="value" id="stat-medium">0</span>
+    </div>
+    <div class="stat-card low">
+      <span class="label">Low</span>
+      <span class="value" id="stat-low">0</span>
+    </div>
+    <div class="stat-card">
+      <span class="label">Unique IPs</span>
+      <span class="value" id="stat-ips">0</span>
+    </div>
+  </div>
+
+  <!-- ── Main grid ──────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- World map -->
+    <div class="panel" id="map-panel">
+      <div class="panel-header">Attacker Origins — World Map</div>
+      <div id="map"></div>
+    </div>
+
+    <!-- Live request feed -->
+    <div class="panel" id="feed-panel">
+      <div class="panel-header">Live Request Feed <button id="clear-data-btn" class="btn-reset" style="margin-left:auto">Clear All Data</button></div>
+      <div class="feed-search">
+        <input type="search" id="feed-search-input" placeholder="Search IP, path, body, country…">
+      </div>
+      <div class="feed-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>IP</th>
+              <th>Path</th>
+              <th>Risk</th>
+              <th>Category</th>
+              <th>Country</th>
+            </tr>
+          </thead>
+          <tbody id="feed-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div id="charts-row">
+      <div class="panel">
+        <div class="panel-header">Risk Levels</div>
+        <div style="flex:1; padding:12px; position:relative;">
+          <canvas id="risk-chart"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Request Categories</div>
+        <div style="flex:1; padding:12px; position:relative;">
+          <canvas id="category-chart"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">24-Hour Activity</div>
+        <div style="flex:1; padding:12px; position:relative;">
+          <canvas id="timeline-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- ── Services panel ─────────────────────────────────────────────── -->
+  <div id="services-section">
+    <div class="services-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+      Simulated Platforms
+      <span style="font-size:11px; font-weight:400; color:var(--text-muted)">
+        Toggle to enable / disable · TRAP to tarpit attackers
+      </span>
+      <button id="reset-services-btn" class="btn-reset" style="margin-left:auto">Reset All</button>
+    </div>
+    <div class="services-grid" id="services-grid">
+      <!-- Populated by dashboard.js -->
+    </div>
+  </div>
+
+  <!-- ── Intelligence panel (webhooks + canary) ──────────────────────── -->
+  <div id="intel-section">
+    <div class="services-header">
+      🔍 Intelligence
+    </div>
+    <div class="intel-grid">
+      <!-- Webhook card -->
+      <div class="intel-card">
+        <div class="intel-card-title">Webhook Alerts</div>
+        <div id="webhook-status" class="intel-card-body">Loading…</div>
+        <div class="intel-card-actions">
+          <button id="test-webhook-btn" class="btn-reset">Send Test Alert</button>
+          <span id="webhook-test-result" class="intel-result"></span>
+        </div>
+      </div>
+      <!-- Canary token card -->
+      <div class="intel-card">
+        <div class="intel-card-title">Canary Token</div>
+        <div class="intel-card-body">
+          <span style="font-size:11px; color:var(--text-muted)">Embedded in /v1/models — detect credential reuse</span>
+          <div id="canary-token-display" style="font-family:monospace; font-size:12px; color:var(--risk-medium); margin-top:6px; word-break:break-all">Loading…</div>
+        </div>
+        <div class="intel-card-actions">
+          <button id="copy-canary-btn" class="btn-reset">Copy Token</button>
+          <span id="canary-copy-result" class="intel-result"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Attack Intelligence Charts ───────────────────────────────────── -->
+  <div id="intel-charts-section">
+    <div class="services-header">
+      📈 Attack Intelligence
+    </div>
+    <div id="intel-charts-grid">
+      <div class="intel-chart-panel">
+        <div class="intel-chart-title">7-Day Request Trend</div>
+        <canvas id="weekly-chart" height="120"></canvas>
+      </div>
+      <div class="intel-chart-panel">
+        <div class="intel-chart-title">Hour-of-Day Heatmap</div>
+        <div id="heatmap-chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Blocked IPs ────────────────────────────────────────────────────── -->
+  <div id="blocked-section">
+    <div class="services-header" onclick="toggleBlockedSection()" style="cursor:pointer">
+      🚫 Blocked IPs
+      <span id="blocked-count-badge" class="blocked-badge">0</span>
+      <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:8px">
+        Auto-block: <span id="auto-block-status">off</span>
+      </span>
+      <span style="margin-left:auto; font-size:11px; color:var(--text-muted)">click to expand ▾</span>
+    </div>
+    <div id="blocked-body" style="display:none; padding:12px 0">
+      <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap">
+        <input id="block-ip-input" type="text" placeholder="IP to block…" style="font-family:monospace; font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px; width:180px">
+        <input id="block-reason-input" type="text" placeholder="Reason (optional)" style="font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px; flex:1; min-width:160px">
+        <button onclick="manualBlockIp()" class="btn-reset" style="color:var(--risk-critical)">Block</button>
+      </div>
+      <table class="blocked-table">
+        <thead><tr><th>IP</th><th>Reason</th><th>Blocked At</th><th></th></tr></thead>
+        <tbody id="blocked-tbody">
+          <tr><td colspan="4" style="color:var(--text-muted); text-align:center; padding:16px">No blocked IPs</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── IP Session Drawer ───────────────────────────────────────────── -->
+  <div id="ip-drawer" class="ip-drawer">
+    <div class="ip-drawer-header">
+      <span id="ip-drawer-title">IP Session</span>
+      <button id="ip-drawer-block-btn" class="btn-reset" style="color:var(--risk-critical); font-size:12px" onclick="blockIpFromDrawer()">🚫 Block IP</button>
+      <button id="ip-drawer-close" class="btn-reset">✕ Close</button>
+    </div>
+    <div id="ip-drawer-body" class="ip-drawer-body"></div>
+  </div>
+  <div id="ip-drawer-overlay" class="ip-drawer-overlay"></div>
+
+  <!-- ── Toast notification ─────────────────────────────────────────── -->
+  <div id="toast" class="toast"></div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────── -->
+  <footer>
+    <span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2"><circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/></svg>
+      <span id="footer-time">00:00:00</span>
+    </span>
+    <span>Port 11434 &mdash; Ollama Honeypot</span>
+    <span style="margin-left:auto; color:#30363d">
+      Dashboard auto-refreshes every 30s &bull; WebSocket live updates
+    </span>
+  </footer>
+
+</div><!-- /app -->
+
+<!-- ── Request body viewer modal ───────────────────────────────────────── -->
+<div id="req-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeRequestModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-meta">
+        <span id="modal-risk" class="risk-badge"></span>
+        <span id="modal-method" class="modal-method"></span>
+        <span id="modal-path" class="modal-path"></span>
+      </div>
+      <div class="modal-meta-right">
+        <span id="modal-ip" class="modal-ip"></span>
+        <span id="modal-country" class="modal-country"></span>
+        <span id="modal-ts" class="modal-ts"></span>
+        <button class="modal-action-btn" id="modal-curl-btn" onclick="copyModalAsCurl()">Copy as cURL</button>
+        <button class="modal-action-btn modal-action-danger" id="modal-block-btn" onclick="blockIpFromModal()">Block IP</button>
+      </div>
+      <button class="modal-close" onclick="closeRequestModal()" title="Close (Esc)">&times;</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" onclick="switchModalTab('request',this)">Request</button>
+      <button class="modal-tab" onclick="switchModalTab('patterns',this)">Patterns</button>
+    </div>
+    <div id="modal-tab-request" class="modal-tab-content">
+      <div class="modal-section">
+        <div class="modal-section-title clickable" onclick="toggleModalHeaders()">
+          Headers <span id="modal-header-toggle" class="toggle-hint">(click to expand)</span>
+        </div>
+        <div id="modal-headers-table" style="display:none">
+          <table class="modal-table"><tbody id="modal-headers-body"></tbody></table>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Body</div>
+        <pre id="modal-body" class="modal-body-pre"></pre>
+      </div>
+    </div>
+    <div id="modal-tab-patterns" class="modal-tab-content" style="display:none">
+      <ul id="modal-patterns-list" class="modal-patterns-list"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scripts ─────────────────────────────────────────────────────────── -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="/static/js/map.js"></script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/dashboard.js"></script>
+
+</body>
+</html>

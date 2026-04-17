@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: Syntax & lint check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check syntax (py_compile)
+        run: |
+          find . -name "*.py" \
+            -not -path "./.venv/*" \
+            -not -path "./venv/*" \
+            | xargs python3 -m py_compile
+          echo "Syntax OK"
+
+      - name: Lint (ruff)
+        run: |
+          pip install ruff --quiet
+          ruff check . --select=E9,F63,F7,F82 --ignore=F821
+          echo "Lint OK"
