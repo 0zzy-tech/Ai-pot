@@ -36,6 +36,7 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  Canary Token:   sk-pot-a1b2c3d4e5f6g7h8    [Copy]                 │
 │  Deception URL:  http://host/track/abc123    [Copy]                 │
 │  Feodo Feed:     ✓ Active · 8,234 C2 IPs   · refreshed 04:00       │
+│    Detected IPs: 185.220.x.x · 103.21.x.x  (click to open drawer) │
 │  ThreatFox Feed: ✓ Active · 12,847 IOCs    · refreshed 04:00       │
 ├─────────────────────────────────────────────────────────────────────┤
 │  🔬 IP Session Drawer (click any IP)                                 │
@@ -57,6 +58,8 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  🔎 Custom Detection Rules  [2]  Operator regex patterns            │
 │  "Crypto miner"  xmrig|stratum\+  CRITICAL  [ON]  [Delete]         │
 │  Name / Pattern / Risk ▾               [Add Rule]                  │
+├─────────────────────────────────────────────────────────────────────┤
+│  ABOUT ▾  (collapsible — built by Ozzytech · Martyn Oswald)         │
 └─────────────────────────────────────────────────────────────────────┘
 ● = high AbuseIPDB score · C2 = Feodo botnet · TF = ThreatFox IOC · 📝 = note
 ```
@@ -327,6 +330,7 @@ Define your own regex patterns from the **🔎 Custom Detection Rules** panel:
 The honeypot downloads the [Feodo Tracker](https://feodotracker.abuse.ch/) recommended C2 IP blocklist at startup and refreshes it every 24 hours (no API key required):
 - IPs matching known C2 infrastructure get a red **C2** badge in the live feed
 - Feed statistics (IP count, last refresh time) are shown in the Intelligence panel
+- **Detected C2 IPs table** — any attacker IP that matched the feed is listed directly in the Intelligence panel with hit count, country, last seen timestamp, and max risk level; click any IP to open its session drawer
 - The lookup is synchronous and in-memory — zero overhead on the hot path
 
 ### Deception Tokens
