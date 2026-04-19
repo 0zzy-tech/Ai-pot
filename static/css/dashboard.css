@@ -600,6 +600,36 @@ footer span { display: flex; align-items: center; gap: 6px; }
 .modal-action-danger { color: var(--risk-critical) !important; border-color: var(--risk-critical) !important; }
 .modal-action-danger:hover { background: rgba(248,81,73,.15); }
 
+/* ── Allowed IPs section ─────────────────────────────────────────────── */
+#allowed-section { padding: 0 20px; border-bottom: 1px solid var(--border); }
+#allowed-section .services-header { padding: 12px 0; }
+#allowed-tbody td:first-child { color: var(--accent); font-family: monospace; }
+
+/* ── IP note in drawer ───────────────────────────────────────────────── */
+.ip-drawer-note {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.ip-note-display {
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-block;
+  min-width: 80px;
+}
+.ip-note-display:hover { color: var(--accent); }
+.ip-note-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
 /* ── Responsive adjustments ──────────────────────────────────────────── */
 @media (max-width: 900px) {
   .main-grid { grid-template-columns: 1fr; grid-template-rows: 300px 400px 300px; }

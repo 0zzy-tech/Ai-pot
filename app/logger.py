@@ -142,6 +142,10 @@ async def log_request(
             from app.webhooks import fire_webhooks
             asyncio.create_task(fire_webhooks(record))
 
+        # Include operator note if set for this IP
+        from app import service_registry as _sr
+        ip_note = _sr.get_ip_note(ip)
+
         # Build broadcast payload (no full headers/body — keep WS messages small)
         broadcast_data = {
             "id":               row_id,
@@ -160,6 +164,7 @@ async def log_request(
             "flagged_patterns": flagged,
             "abuse_score":      rep["abuse_score"] if rep else None,
             "is_tor":           rep["is_tor"]      if rep else False,
+            "note":             ip_note,
         }
         await manager.broadcast({"type": "new_request", "data": broadcast_data})
 

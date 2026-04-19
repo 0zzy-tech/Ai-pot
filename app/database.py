@@ -4,10 +4,12 @@ Single write lock prevents SQLite journal conflicts on a single-worker Pi.
 """
 
 import asyncio
+import csv
+import io
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 import aiosqlite
 
@@ -69,6 +71,18 @@ async def init_db() -> None:
                 ip         TEXT PRIMARY KEY,
                 reason     TEXT,
                 blocked_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS allowed_ips (
+                ip       TEXT PRIMARY KEY,
+                label    TEXT,
+                added_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ip_notes (
+                ip         TEXT PRIMARY KEY,
+                note       TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
         """)
         await db.commit()
@@ -539,3 +553,130 @@ async def get_hourly_heatmap() -> list[dict]:
             """
         )
         return [dict(r) for r in await cur.fetchall()]
+
+
+# ── Allowed IPs ────────────────────────────────────────────────────────────────
+
+async def get_allowed_ips() -> list[dict]:
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT ip, label, added_at FROM allowed_ips ORDER BY added_at DESC"
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def add_allowed_ip(ip: str, label: str) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO allowed_ips (ip, label, added_at) VALUES (?, ?, datetime('now'))",
+                (ip, label),
+            )
+            await db.commit()
+
+
+async def remove_allowed_ip(ip: str) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute("DELETE FROM allowed_ips WHERE ip = ?", (ip,))
+            await db.commit()
+
+
+# ── IP Notes ───────────────────────────────────────────────────────────────────
+
+async def get_ip_note(ip: str) -> Optional[str]:
+    async with get_db() as db:
+        cur = await db.execute("SELECT note FROM ip_notes WHERE ip = ?", (ip,))
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+
+async def upsert_ip_note(ip: str, note: str) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO ip_notes (ip, note, updated_at) VALUES (?, ?, datetime('now'))",
+                (ip, note),
+            )
+            await db.commit()
+
+
+async def delete_ip_note(ip: str) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute("DELETE FROM ip_notes WHERE ip = ?", (ip,))
+            await db.commit()
+
+
+async def get_all_ip_notes() -> dict[str, str]:
+    """Return all notes as {ip: note} dict — used for in-memory cache at startup."""
+    async with get_db() as db:
+        cur = await db.execute("SELECT ip, note FROM ip_notes")
+        return {row[0]: row[1] for row in await cur.fetchall()}
+
+
+# ── CSV export ─────────────────────────────────────────────────────────────────
+
+CSV_FIELDNAMES = [
+    "id", "timestamp", "ip", "method", "path", "category", "risk_level",
+    "country", "city", "user_agent", "flagged_patterns", "body_snippet",
+]
+
+
+async def stream_requests_csv(
+    risk: Optional[str] = None,
+    category: Optional[str] = None,
+    ip: Optional[str] = None,
+    since: Optional[str] = None,
+    limit: int = 50000,
+) -> AsyncIterator[str]:
+    """Async generator that yields CSV rows (header first) for streaming export."""
+    conditions: list[str] = []
+    params: list = []
+    if risk:
+        conditions.append("risk_level = ?")
+        params.append(risk.upper())
+    if category:
+        conditions.append("category = ?")
+        params.append(category)
+    if ip:
+        conditions.append("ip = ?")
+        params.append(ip)
+    if since:
+        conditions.append("timestamp >= ?")
+        params.append(since)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    params.append(limit)
+
+    # Yield header
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(CSV_FIELDNAMES)
+    yield buf.getvalue()
+
+    async with get_db() as db:
+        cur = await db.execute(
+            f"""
+            SELECT id, timestamp, ip, method, path, category, risk_level,
+                   country, city, user_agent, flagged_patterns, body
+            FROM requests
+            {where}
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            params,
+        )
+        while True:
+            rows = await cur.fetchmany(500)
+            if not rows:
+                break
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            for row in rows:
+                body_snippet = (row[11] or "")[:200]
+                w.writerow([
+                    row[0], row[1], row[2], row[3], row[4],
+                    row[5], row[6], row[7], row[8], row[9],
+                    row[10], body_snippet,
+                ])
+            yield buf.getvalue()

@@ -13,6 +13,7 @@
 
   <script>
     window.ADMIN_PREFIX = "{{ admin_prefix }}";
+    window.WS_TOKEN     = "{{ ws_token }}";
   </script>
 </head>
 <body>
@@ -78,7 +79,10 @@
 
     <!-- Live request feed -->
     <div class="panel" id="feed-panel">
-      <div class="panel-header">Live Request Feed <button id="clear-data-btn" class="btn-reset" style="margin-left:auto">Clear All Data</button></div>
+      <div class="panel-header">Live Request Feed
+        <a id="export-csv-btn" href="{{ admin_prefix }}/api/export/requests.csv" class="btn-reset" style="margin-left:auto; text-decoration:none; font-size:11px">⬇ Export CSV</a>
+        <button id="clear-data-btn" class="btn-reset">Clear All Data</button>
+      </div>
       <div class="feed-search">
         <input type="search" id="feed-search-input" placeholder="Search IP, path, body, country…">
       </div>
@@ -214,6 +218,31 @@
     </div>
   </div>
 
+  <!-- ── Allowed IPs ──────────────────────────────────────────────────────────── -->
+  <div id="allowed-section">
+    <div class="services-header" onclick="toggleAllowedSection()" style="cursor:pointer">
+      ✅ Allowed IPs
+      <span id="allowed-count-badge" class="blocked-badge" style="background:var(--risk-low);color:#0d1117">0</span>
+      <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:8px">
+        Whitelisted IPs — never logged or blocked
+      </span>
+      <span style="margin-left:auto; font-size:11px; color:var(--text-muted)">click to expand ▾</span>
+    </div>
+    <div id="allowed-body" style="display:none; padding:12px 0">
+      <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap">
+        <input id="allow-ip-input" type="text" placeholder="IP to whitelist…" style="font-family:monospace; font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px; width:180px">
+        <input id="allow-label-input" type="text" placeholder="Label (optional)" style="font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px; flex:1; min-width:160px">
+        <button onclick="addAllowedIp()" class="btn-reset" style="color:var(--risk-low)">Allow</button>
+      </div>
+      <table class="blocked-table">
+        <thead><tr><th>IP</th><th>Label</th><th>Added At</th><th></th></tr></thead>
+        <tbody id="allowed-tbody">
+          <tr><td colspan="4" style="color:var(--text-muted); text-align:center; padding:16px">No allowed IPs</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   </div><!-- /content-area -->
 
   <!-- ── IP Session Drawer ───────────────────────────────────────────── -->
@@ -222,6 +251,11 @@
       <span id="ip-drawer-title">IP Session</span>
       <button id="ip-drawer-block-btn" class="btn-reset" style="color:var(--risk-critical); font-size:12px" onclick="blockIpFromDrawer()">🚫 Block IP</button>
       <button id="ip-drawer-close" class="btn-reset">✕ Close</button>
+    </div>
+    <div id="ip-drawer-note" class="ip-drawer-note">
+      <span id="ip-note-display" class="ip-note-display" onclick="editIpNote()"></span>
+      <input id="ip-note-input" class="ip-note-input" type="text" placeholder="Add a note for this IP…" style="display:none"
+             onblur="saveIpNote()" onkeydown="if(event.key==='Enter')saveIpNote(); if(event.key==='Escape')cancelIpNote()">
     </div>
     <div id="ip-drawer-body" class="ip-drawer-body"></div>
   </div>

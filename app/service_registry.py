@@ -172,6 +172,12 @@ _tarpit_cache: dict[str, bool] = {sid: False for sid in SERVICES}
 # ── In-memory blocked IP set ───────────────────────────────────────────────────
 _blocked_ips: set[str] = set()
 
+# ── In-memory allowed IP set (never logged / blocked) ─────────────────────────
+_allowed_ips: set[str] = set()
+
+# ── In-memory IP notes cache ───────────────────────────────────────────────────
+_ip_notes: dict[str, str] = {}
+
 
 # ── Path → service lookup (sync, fast) ────────────────────────────────────────
 
@@ -220,6 +226,16 @@ def is_ip_blocked(ip: str) -> bool:
     return ip in _blocked_ips
 
 
+def is_ip_allowed(ip: str) -> bool:
+    """Sync check — safe to call from the ASGI middleware."""
+    return ip in _allowed_ips
+
+
+def get_ip_note(ip: str) -> Optional[str]:
+    """Sync — returns the operator note for this IP, or None."""
+    return _ip_notes.get(ip)
+
+
 async def init_ip_blocklist() -> None:
     """Load persisted blocked IPs from DB into in-memory set at startup."""
     from app.database import get_blocked_ips as db_get_blocked_ips
@@ -245,6 +261,53 @@ async def unblock_ip(ip: str) -> None:
     logger.info("IP unblocked: %s", ip)
 
 
+async def init_ip_allowlist() -> None:
+    """Load persisted allowed IPs from DB into in-memory set at startup."""
+    from app.database import get_allowed_ips as db_get_allowed_ips
+    rows = await db_get_allowed_ips()
+    for row in rows:
+        _allowed_ips.add(row["ip"])
+    logger.info("IP allowlist loaded — %d allowed IPs", len(_allowed_ips))
+
+
+async def allow_ip(ip: str, label: str) -> None:
+    """Allow an IP — updates in-memory set immediately, persists to DB."""
+    from app.database import add_allowed_ip
+    _allowed_ips.add(ip)
+    await add_allowed_ip(ip, label)
+    logger.info("IP allowed: %s (%s)", ip, label)
+
+
+async def unallow_ip(ip: str) -> None:
+    """Remove an IP from the allow-list."""
+    from app.database import remove_allowed_ip
+    _allowed_ips.discard(ip)
+    await remove_allowed_ip(ip)
+    logger.info("IP removed from allowlist: %s", ip)
+
+
+async def init_ip_notes() -> None:
+    """Load all operator IP notes from DB into in-memory dict at startup."""
+    from app.database import get_all_ip_notes
+    notes = await get_all_ip_notes()
+    _ip_notes.update(notes)
+    logger.info("IP notes loaded — %d notes", len(_ip_notes))
+
+
+async def set_ip_note(ip: str, note: str) -> None:
+    """Upsert an operator note for an IP — updates cache + DB."""
+    from app.database import upsert_ip_note
+    _ip_notes[ip] = note
+    await upsert_ip_note(ip, note)
+
+
+async def delete_ip_note(ip: str) -> None:
+    """Delete the operator note for an IP."""
+    from app.database import delete_ip_note
+    _ip_notes.pop(ip, None)
+    await delete_ip_note(ip)
+
+
 async def init_service_registry() -> None:
     """Called once at startup — load persisted states from DB into cache."""
     from app.database import get_db
@@ -262,6 +325,8 @@ async def init_service_registry() -> None:
             _tarpit_cache[sid] = bool(row["tarpitted"])
 
     await init_ip_blocklist()
+    await init_ip_allowlist()
+    await init_ip_notes()
 
     logger.info(
         "Service registry loaded — %d enabled / %d disabled / %d tarpitted",

@@ -16,16 +16,19 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from app import service_registry
 from app.broadcaster import manager
 from app.database import (
+    add_allowed_ip,
     clear_all_requests,
+    get_allowed_ips,
     get_blocked_ips,
     get_hourly_heatmap,
+    get_ip_note,
     get_map_data,
     get_request_by_id,
     get_requests,
@@ -34,6 +37,8 @@ from app.database import (
     get_stats,
     get_threat_report_data,
     get_weekly_trend,
+    remove_allowed_ip,
+    stream_requests_csv,
 )
 from config import Config
 
@@ -68,6 +73,7 @@ async def dashboard(request: Request, _: str = Depends(_check_auth)):
         {
             "host":         request.headers.get("host", "localhost"),
             "admin_prefix": Config.ADMIN_PREFIX,
+            "ws_token":     Config.WS_TOKEN,
         },
     )
 
@@ -296,6 +302,81 @@ async def api_block_ip_from_request(request_id: int, _: str = Depends(_check_aut
     await service_registry.block_ip(ip, reason)
     await manager.broadcast({"type": "ip_blocked", "data": {"ip": ip, "reason": reason}})
     return JSONResponse(content={"ip": ip, "blocked": True})
+
+
+# ── IP allow-list ─────────────────────────────────────────────────────────────
+
+@router.get("/api/allowed-ips")
+async def api_get_allowed_ips(_: str = Depends(_check_auth)):
+    return JSONResponse(content=await get_allowed_ips())
+
+
+@router.post("/api/allowed-ips")
+async def api_allow_ip(request: Request, _: str = Depends(_check_auth)):
+    body = await request.json()
+    ip = body.get("ip", "").strip()
+    label = body.get("label", "").strip() or "manual"
+    if not ip:
+        raise HTTPException(status_code=400, detail="ip required")
+    from app import service_registry
+    await service_registry.allow_ip(ip, label)
+    return JSONResponse(content={"ip": ip, "label": label, "allowed": True})
+
+
+@router.delete("/api/allowed-ips/{ip}")
+async def api_unallow_ip(ip: str, _: str = Depends(_check_auth)):
+    from app import service_registry
+    await service_registry.unallow_ip(ip)
+    return JSONResponse(content={"ip": ip, "allowed": False})
+
+
+# ── IP notes ─────────────────────────────────────────────────────────────────
+
+@router.get("/api/ip-notes/{ip}")
+async def api_get_ip_note(ip: str, _: str = Depends(_check_auth)):
+    note = await get_ip_note(ip)
+    return JSONResponse(content={"ip": ip, "note": note})
+
+
+@router.post("/api/ip-notes/{ip}")
+async def api_set_ip_note(ip: str, request: Request, _: str = Depends(_check_auth)):
+    body = await request.json()
+    note = body.get("note", "").strip()
+    if not note:
+        raise HTTPException(status_code=400, detail="note required")
+    from app import service_registry
+    await service_registry.set_ip_note(ip, note)
+    return JSONResponse(content={"ip": ip, "note": note})
+
+
+@router.delete("/api/ip-notes/{ip}")
+async def api_delete_ip_note(ip: str, _: str = Depends(_check_auth)):
+    from app import service_registry
+    await service_registry.delete_ip_note(ip)
+    return JSONResponse(content={"ip": ip, "note": None})
+
+
+# ── Full CSV export ───────────────────────────────────────────────────────────
+
+@router.get("/api/export/requests.csv")
+async def api_export_requests_csv(
+    risk:     Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    ip:       Optional[str] = Query(None),
+    since:    Optional[str] = Query(None),
+    limit:    int            = Query(50000, ge=1, le=500000),
+    _: str = Depends(_check_auth),
+):
+    """Stream all (or filtered) requests as a CSV download."""
+    filename = (
+        f"honeypot_requests_"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    return StreamingResponse(
+        stream_requests_csv(risk=risk, category=category, ip=ip, since=since, limit=limit),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Intelligence charts ───────────────────────────────────────────────────────

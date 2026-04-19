@@ -165,6 +165,11 @@ class _CaptureMiddleware:
             or client_ip == "127.0.0.1"
         )
 
+        # Allow-list gate — whitelisted IPs pass through without logging
+        if not skip and service_registry.is_ip_allowed(client_ip):
+            await self._app(scope, replay_receive, send)
+            return
+
         # IP block gate — blocked IPs get 429 immediately (still logged)
         if not skip and service_registry.is_ip_blocked(client_ip):
             req = Request(scope)

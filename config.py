@@ -3,6 +3,7 @@ Central configuration for the AI Honeypot.
 All values can be overridden via environment variables — useful for Docker.
 """
 
+import hashlib
 import os
 
 
@@ -67,3 +68,8 @@ class Config:
     AUTO_BLOCK_ENABLED   = os.getenv("AUTO_BLOCK_ENABLED", "false").lower() == "true"
     AUTO_BLOCK_THRESHOLD = int(os.getenv("AUTO_BLOCK_THRESHOLD", "3"))   # CRITICAL hits
     AUTO_BLOCK_WINDOW    = int(os.getenv("AUTO_BLOCK_WINDOW", "300"))    # within seconds
+
+    # ── WebSocket auth token ──────────────────────────────────────────────────
+    # sha256 of ADMIN_PASSWORD — injected into the dashboard page and used as
+    # a query param on the WebSocket URL so unauthenticated clients can't connect.
+    WS_TOKEN = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()

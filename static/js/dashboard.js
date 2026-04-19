@@ -11,6 +11,7 @@
   'use strict';
 
   const ADMIN_PREFIX  = window.ADMIN_PREFIX || '/__admin';
+  const WS_TOKEN      = window.WS_TOKEN     || '';
   const MAX_FEED_ROWS = 200;
 
   // ── State ───────────────────────────────────────────────────────────────────
@@ -69,9 +70,11 @@
       ? ` <span title="AbuseIPDB score: ${d.abuse_score}" style="color:var(--risk-critical)">&#9679;</span>` : '';
     const torBadge = d.is_tor
       ? ` <span title="Tor exit node" style="font-size:10px;color:var(--risk-high)">TOR</span>` : '';
+    const noteIndicator = d.note
+      ? ` <span title="${esc(d.note)}" style="font-size:10px;cursor:pointer">📝</span>` : '';
     return `
       <td>${fmtTime(d.timestamp)}</td>
-      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}</td>
+      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${noteIndicator}</td>
       <td title="${esc(d.path)}">${esc(d.path)}</td>
       <td>${riskBadge(d.risk_level)}</td>
       <td>${catChip(d.category)}</td>
@@ -282,7 +285,8 @@
   // ── WebSocket ─────────────────────────────────────────────────────────────────
   function connectWS() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    const tokenParam = WS_TOKEN ? `?token=${encodeURIComponent(WS_TOKEN)}` : '';
+    ws = new WebSocket(`${proto}://${location.host}/ws${tokenParam}`);
 
     ws.onopen = () => {
       wsReconnectDelay = 1000;
@@ -344,6 +348,9 @@
     body.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading…</div>';
     drawer.classList.add('open');
     overlay.classList.add('visible');
+
+    // Load current note
+    _refreshIpNoteDisplay(ip);
 
     fetch(`${ADMIN_PREFIX}/api/ip/${encodeURIComponent(ip)}/requests`)
       .then(r => r.json())
@@ -453,6 +460,125 @@
     if (!body) return;
     const visible = body.style.display !== 'none';
     body.style.display = visible ? 'none' : '';
+  }
+
+  // ── IP Allow-list ─────────────────────────────────────────────────────────────
+
+  function loadAllowedIps() {
+    fetch(`${ADMIN_PREFIX}/api/allowed-ips`)
+      .then(r => r.json())
+      .then(rows => {
+        const badge = document.getElementById('allowed-count-badge');
+        const tbody = document.getElementById('allowed-tbody');
+        if (badge) badge.textContent = rows.length;
+        if (!tbody) return;
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:16px">No allowed IPs</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr>
+            <td>${esc(r.ip)}</td>
+            <td style="color:var(--text-muted)">${esc(r.label || '—')}</td>
+            <td style="color:var(--text-muted)">${(r.added_at || '').slice(0,19)}</td>
+            <td><button class="btn-reset" style="font-size:11px;color:var(--text-muted)" onclick="removeAllowedIp('${esc(r.ip)}')">Remove</button></td>
+          </tr>`).join('');
+      })
+      .catch(console.warn);
+  }
+
+  function addAllowedIp() {
+    const ip    = (document.getElementById('allow-ip-input')?.value || '').trim();
+    const label = (document.getElementById('allow-label-input')?.value || '').trim() || 'manual';
+    if (!ip) return;
+    fetch(`${ADMIN_PREFIX}/api/allowed-ips`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ip, label}),
+    })
+      .then(r => r.json())
+      .then(() => {
+        showToast(`${ip} added to allow-list`);
+        document.getElementById('allow-ip-input').value = '';
+        document.getElementById('allow-label-input').value = '';
+        loadAllowedIps();
+      })
+      .catch(() => showToast('Failed to add IP'));
+  }
+
+  function removeAllowedIp(ip) {
+    fetch(`${ADMIN_PREFIX}/api/allowed-ips/${encodeURIComponent(ip)}`, {method: 'DELETE'})
+      .then(r => r.json())
+      .then(() => { showToast(`${ip} removed from allow-list`); loadAllowedIps(); })
+      .catch(() => showToast('Failed to remove IP'));
+  }
+
+  function toggleAllowedSection() {
+    const body = document.getElementById('allowed-body');
+    if (!body) return;
+    const visible = body.style.display !== 'none';
+    body.style.display = visible ? 'none' : '';
+  }
+
+  // ── IP Notes ──────────────────────────────────────────────────────────────────
+
+  function _refreshIpNoteDisplay(ip) {
+    const display = document.getElementById('ip-note-display');
+    const input   = document.getElementById('ip-note-input');
+    if (!display) return;
+    fetch(`${ADMIN_PREFIX}/api/ip-notes/${encodeURIComponent(ip)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.note) {
+          display.textContent = `📝 ${data.note}`;
+          display.style.display = '';
+        } else {
+          display.textContent = '+ Add note…';
+          display.style.color = 'var(--text-muted)';
+          display.style.display = '';
+        }
+        if (input) input.style.display = 'none';
+      })
+      .catch(() => {});
+  }
+
+  function editIpNote() {
+    if (!_currentDrawerIp) return;
+    const display = document.getElementById('ip-note-display');
+    const input   = document.getElementById('ip-note-input');
+    if (!display || !input) return;
+    // Populate input with current note (strip prefix)
+    const current = display.textContent.replace(/^📝\s*/, '').replace(/^\+\s*Add note…$/, '');
+    input.value = current;
+    display.style.display = 'none';
+    input.style.display = '';
+    input.focus();
+  }
+
+  function saveIpNote() {
+    if (!_currentDrawerIp) return;
+    const input = document.getElementById('ip-note-input');
+    if (!input) return;
+    const note = input.value.trim();
+    if (!note) {
+      // Delete the note if empty
+      fetch(`${ADMIN_PREFIX}/api/ip-notes/${encodeURIComponent(_currentDrawerIp)}`, {method: 'DELETE'})
+        .then(() => _refreshIpNoteDisplay(_currentDrawerIp))
+        .catch(() => {});
+      return;
+    }
+    fetch(`${ADMIN_PREFIX}/api/ip-notes/${encodeURIComponent(_currentDrawerIp)}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({note}),
+    })
+      .then(() => _refreshIpNoteDisplay(_currentDrawerIp))
+      .catch(() => showToast('Failed to save note'));
+  }
+
+  function cancelIpNote() {
+    if (!_currentDrawerIp) return;
+    _refreshIpNoteDisplay(_currentDrawerIp);
   }
 
   // ── Webhook config ───────────────────────────────────────────────────────────
@@ -647,6 +773,7 @@
     loadWebhookConfig();
     loadCanaryToken();
     loadBlockedIps();
+    loadAllowedIps();
     loadIntelCharts();
 
     // Update auto-block status indicator
@@ -713,4 +840,21 @@
     updateFooterTime();
     setInterval(updateFooterTime, 1000);
   });
+
+  // ── Expose functions needed by HTML onclick attributes ────────────────────────
+  window.manualBlockIp       = manualBlockIp;
+  window.unblockIp           = unblockIp;
+  window.blockIpFromDrawer   = blockIpFromDrawer;
+  window.blockIpFromModal    = blockIpFromModal;
+  window.toggleBlockedSection = toggleBlockedSection;
+  window.copyModalAsCurl     = copyModalAsCurl;
+  window.closeRequestModal   = closeRequestModal;
+  window.switchModalTab      = switchModalTab;
+  window.toggleModalHeaders  = toggleModalHeaders;
+  window.addAllowedIp        = addAllowedIp;
+  window.removeAllowedIp     = removeAllowedIp;
+  window.toggleAllowedSection = toggleAllowedSection;
+  window.editIpNote          = editIpNote;
+  window.saveIpNote          = saveIpNote;
+  window.cancelIpNote        = cancelIpNote;
 })();
