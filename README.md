@@ -638,3 +638,19 @@ sudo systemctl stop    ai-honeypot
 sudo systemctl restart ai-honeypot
 sudo journalctl -u ai-honeypot -f
 ```
+
+---
+
+## About
+
+AI Honeypot is a lightweight, high-fidelity deception platform built to catch automated scanners, credential harvesters, and targeted attackers probing for exposed AI infrastructure. It impersonates 13 real AI API servers simultaneously — Ollama, OpenAI, Anthropic, HuggingFace, Stable Diffusion, and more — on a single port, capturing and classifying every request in real time.
+
+The project grew out of a curiosity about what actually hits an exposed AI endpoint on the internet. The answer turned out to be a lot: credential stuffers, botnet C2 callbacks, jailbreak attempts, prompt injection, mass scanners, and researchers — all within hours of a port being opened.
+
+Everything runs on a Raspberry Pi with no cloud dependencies. A single async worker, SQLite, and about 384 MB of RAM is all it takes.
+
+### Author
+
+**Martyn Oswald** — [0zzy-tech](https://github.com/0zzy-tech)
+
+Built and maintained as an open-source security research tool. Contributions, issues, and ideas welcome.
