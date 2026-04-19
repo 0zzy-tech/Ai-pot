@@ -462,6 +462,41 @@ async def get_requests_by_ip(ip: str, limit: int = 200) -> list[dict]:
         return [dict(r) for r in await cur.fetchall()]
 
 
+async def backfill_c2_flags(c2_ips: set[str]) -> int:
+    """
+    One-time backfill: mark existing requests whose IP is in the C2 feed.
+    Returns the number of rows updated.
+    """
+    if not c2_ips:
+        return 0
+
+    # Get all distinct IPs that haven't been checked yet (is_c2 still default 0)
+    async with get_db() as db:
+        cur = await db.execute("SELECT DISTINCT ip FROM requests WHERE is_c2 = 0")
+        ips = [row[0] for row in await cur.fetchall()]
+
+    matched = [ip for ip in ips if ip in c2_ips]
+    if not matched:
+        return 0
+
+    # Update in batches of 500 to stay within SQLite's parameter limit
+    updated = 0
+    batch_size = 500
+    async with _write_lock:
+        async with get_db() as db:
+            for i in range(0, len(matched), batch_size):
+                batch = matched[i : i + batch_size]
+                placeholders = ",".join("?" * len(batch))
+                await db.execute(
+                    f"UPDATE requests SET is_c2 = 1 WHERE ip IN ({placeholders})",
+                    batch,
+                )
+            await db.commit()
+            updated = len(matched)
+
+    return updated
+
+
 async def get_c2_hits(limit: int = 20) -> list[dict]:
     """Distinct IPs seen in requests that matched the Feodo C2 feed."""
     async with get_db() as db:

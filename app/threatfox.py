@@ -70,8 +70,8 @@ async def refresh_threatfox() -> None:
 
 
 async def threatfox_task() -> None:
-    """Background loop — refreshes the ThreatFox feed every 24 hours."""
-    await refresh_threatfox()
+    """Background loop — refreshes the ThreatFox feed every 24 hours.
+    The initial download is handled at startup before this task is created."""
     while True:
         await asyncio.sleep(REFRESH_INTERVAL_SECS)
         await refresh_threatfox()

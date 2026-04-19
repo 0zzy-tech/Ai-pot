@@ -73,10 +73,20 @@ async def lifespan(app: FastAPI):
     from app.custom_rules import reload_rules
     reload_rules(await get_custom_rules())
 
-    # Start background tasks (threat feed refresh, data retention, scheduled reports)
+    # Load threat feeds synchronously so the backfill can run immediately after
+    from app.threatfeeds import refresh_feeds, threat_feed_task, _c2_ips
+    from app.threatfox import refresh_threatfox, threatfox_task
+    await refresh_feeds()
+    await refresh_threatfox()
+
+    # Backfill is_c2 on any existing requests whose IP is now in the feed
+    from app.database import backfill_c2_flags
+    updated = await backfill_c2_flags(_c2_ips)
+    if updated:
+        logger.info("Backfilled is_c2=1 on %d existing request rows", updated)
+
+    # Start background refresh loops
     from app.scheduler import start_background_tasks
-    from app.threatfeeds import threat_feed_task
-    from app.threatfox import threatfox_task
     asyncio.create_task(threat_feed_task())
     asyncio.create_task(threatfox_task())
     await start_background_tasks()

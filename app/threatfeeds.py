@@ -51,8 +51,8 @@ async def refresh_feeds() -> None:
 
 
 async def threat_feed_task() -> None:
-    """Background loop — refreshes feeds every 24 hours."""
-    await refresh_feeds()
+    """Background loop — refreshes feeds every 24 hours.
+    The initial download is handled at startup before this task is created."""
     while True:
         await asyncio.sleep(REFRESH_INTERVAL_SECS)
         await refresh_feeds()
