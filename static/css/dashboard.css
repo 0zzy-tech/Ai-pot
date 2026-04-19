@@ -25,10 +25,12 @@
   --cat-attack:       #f85149;
 }
 
-html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
 
 /* ── Layout ──────────────────────────────────────────────────────────── */
-.app { display: grid; grid-template-rows: 56px auto 1fr auto; min-height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.content-area { flex: 1; overflow-y: auto; overflow-x: hidden; }
 
 /* ── Header ──────────────────────────────────────────────────────────── */
 header {
