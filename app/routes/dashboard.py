@@ -471,6 +471,13 @@ async def api_threat_feeds(_: str = Depends(_check_auth)):
     return JSONResponse(content=feed_stats())
 
 
+@router.get("/api/threat-feeds/c2-hits")
+async def api_c2_hits(_: str = Depends(_check_auth)):
+    """IPs seen in requests that matched the Feodo C2 feed."""
+    from app.database import get_c2_hits
+    return JSONResponse(content=await get_c2_hits())
+
+
 # ── Full CSV export ───────────────────────────────────────────────────────────
 
 @router.get("/api/export/requests.csv")

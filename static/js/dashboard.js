@@ -688,17 +688,51 @@
   // ── Threat feed stats ─────────────────────────────────────────────────────────
 
   function loadThreatFeedStats() {
-    fetch(`${ADMIN_PREFIX}/api/threat-feeds`)
-      .then(r => r.json())
-      .then(data => {
+    const statsPromise = fetch(`${ADMIN_PREFIX}/api/threat-feeds`).then(r => r.json());
+    const hitsPromise  = fetch(`${ADMIN_PREFIX}/api/threat-feeds/c2-hits`).then(r => r.json()).catch(() => []);
+
+    Promise.all([statsPromise, hitsPromise])
+      .then(([data, hits]) => {
         const el = document.getElementById('threat-feed-status');
         if (!el) return;
+
+        // Status line
+        let html = '';
         if (data.c2_count > 0) {
           const refreshed = data.last_refresh ? data.last_refresh.slice(0,19).replace('T',' ') + ' UTC' : 'never';
-          el.innerHTML = `<span style="color:var(--risk-low)">✓ Active</span> &bull; <strong>${data.c2_count.toLocaleString()}</strong> known C2 IPs &bull; Last refresh: <span style="color:var(--text-muted)">${esc(refreshed)}</span>`;
+          html += `<div><span style="color:var(--risk-low)">✓ Active</span> &bull; <strong>${data.c2_count.toLocaleString()}</strong> known C2 IPs &bull; Last refresh: <span style="color:var(--text-muted)">${esc(refreshed)}</span></div>`;
         } else {
-          el.innerHTML = `<span style="color:var(--text-muted)">Loading… (refreshes automatically every 24h)</span>`;
+          html += `<div><span style="color:var(--text-muted)">Loading… (refreshes automatically every 24h)</span></div>`;
         }
+
+        // Detected IPs table
+        if (hits.length) {
+          html += `<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Detected IPs</div>`;
+          html += `<table style="margin-top:6px;width:100%;font-size:12px">
+            <thead><tr>
+              <th style="text-align:left;padding:4px 8px 4px 0;color:var(--text-muted);font-weight:600">IP</th>
+              <th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Country</th>
+              <th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-weight:600">Hits</th>
+              <th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Last Seen</th>
+              <th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Max Risk</th>
+            </tr></thead>
+            <tbody>`;
+          html += hits.map(h => `
+            <tr>
+              <td style="padding:3px 8px 3px 0">
+                <span class="feed-ip" style="cursor:pointer;color:var(--accent)" onclick="openIpDrawer(${JSON.stringify(esc(h.ip))})">${esc(h.ip)}</span>
+              </td>
+              <td style="padding:3px 8px;color:var(--text-muted)">${esc(h.country || '—')}</td>
+              <td style="padding:3px 8px;text-align:right">${h.cnt}</td>
+              <td style="padding:3px 8px;color:var(--text-muted)">${(h.last_seen || '').slice(0,19).replace('T',' ')}</td>
+              <td style="padding:3px 8px">${h.max_risk ? riskBadge(h.max_risk) : '—'}</td>
+            </tr>`).join('');
+          html += `</tbody></table>`;
+        } else {
+          html += `<div style="margin-top:8px;font-size:12px;color:var(--text-muted)">No C2 IPs detected yet</div>`;
+        }
+
+        el.innerHTML = html;
       })
       .catch(() => {});
   }

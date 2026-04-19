@@ -133,6 +133,11 @@ async def log_request(
                     from app.database import set_ip_cache
                     await set_ip_cache(ip, merged)
 
+        # Threat feed checks (sync in-memory lookups — before insert so is_c2 is persisted)
+        c2_hit = is_known_c2(ip)
+        from app.threatfox import get_threatfox_hit
+        threatfox_hit = get_threatfox_hit(ip)
+
         record = {
             "timestamp":        datetime.now(timezone.utc).isoformat(),
             "ip":               ip,
@@ -149,6 +154,7 @@ async def log_request(
             "lng":              geo["lng"]     if geo else None,
             "asn":              geo["asn"]     if geo else None,
             "flagged_patterns": json.dumps(flagged),
+            "is_c2":            1 if c2_hit else 0,
         }
 
         row_id = await insert_request(record)
@@ -193,11 +199,6 @@ async def log_request(
         # Include operator note if set for this IP
         from app import service_registry as _sr
         ip_note = _sr.get_ip_note(ip)
-
-        # Threat feed checks (sync in-memory lookups)
-        c2_hit = is_known_c2(ip)
-        from app.threatfox import get_threatfox_hit
-        threatfox_hit = get_threatfox_hit(ip)
 
         # Build broadcast payload (no full headers/body — keep WS messages small)
         broadcast_data = {

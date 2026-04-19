@@ -138,6 +138,17 @@ async def init_db() -> None:
         except Exception:
             pass  # Column already exists
 
+    # Idempotent migration: add is_c2 flag to requests
+    try:
+        async with _write_lock:
+            async with get_db() as db:
+                await db.execute(
+                    "ALTER TABLE requests ADD COLUMN is_c2 INTEGER NOT NULL DEFAULT 0"
+                )
+                await db.commit()
+    except Exception:
+        pass  # Column already exists
+
 
 async def insert_request(record: dict) -> int:
     async with _write_lock:
@@ -147,11 +158,11 @@ async def insert_request(record: dict) -> int:
                 INSERT INTO requests
                     (timestamp, ip, method, path, headers, body,
                      category, risk_level, user_agent,
-                     country, city, lat, lng, asn, flagged_patterns)
+                     country, city, lat, lng, asn, flagged_patterns, is_c2)
                 VALUES
                     (:timestamp, :ip, :method, :path, :headers, :body,
                      :category, :risk_level, :user_agent,
-                     :country, :city, :lat, :lng, :asn, :flagged_patterns)
+                     :country, :city, :lat, :lng, :asn, :flagged_patterns, :is_c2)
                 """,
                 record,
             )
@@ -447,6 +458,31 @@ async def get_requests_by_ip(ip: str, limit: int = 200) -> list[dict]:
             LIMIT ?
             """,
             (ip, limit),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def get_c2_hits(limit: int = 20) -> list[dict]:
+    """Distinct IPs seen in requests that matched the Feodo C2 feed."""
+    async with get_db() as db:
+        cur = await db.execute(
+            """
+            SELECT ip, COUNT(*) as cnt, country,
+                   MAX(timestamp) as last_seen,
+                   CASE MAX(CASE risk_level
+                              WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3
+                              WHEN 'MEDIUM'   THEN 2 WHEN 'LOW'  THEN 1
+                              ELSE 0 END)
+                     WHEN 4 THEN 'CRITICAL' WHEN 3 THEN 'HIGH'
+                     WHEN 2 THEN 'MEDIUM'   WHEN 1 THEN 'LOW'
+                   END as max_risk
+            FROM requests
+            WHERE is_c2 = 1
+            GROUP BY ip
+            ORDER BY cnt DESC
+            LIMIT ?
+            """,
+            (limit,),
         )
         return [dict(r) for r in await cur.fetchall()]
 
