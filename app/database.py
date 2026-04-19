@@ -236,7 +236,18 @@ async def get_stats() -> dict:
         # Top IPs
         cur = await db.execute(
             """
-            SELECT ip, COUNT(*) as cnt, country, MAX(timestamp) as last_seen
+            SELECT ip, COUNT(*) as cnt, country, MAX(timestamp) as last_seen,
+                   CASE MAX(CASE risk_level
+                              WHEN 'CRITICAL' THEN 4
+                              WHEN 'HIGH'     THEN 3
+                              WHEN 'MEDIUM'   THEN 2
+                              WHEN 'LOW'      THEN 1
+                              ELSE 0 END)
+                     WHEN 4 THEN 'CRITICAL'
+                     WHEN 3 THEN 'HIGH'
+                     WHEN 2 THEN 'MEDIUM'
+                     WHEN 1 THEN 'LOW'
+                   END as max_risk
             FROM requests
             GROUP BY ip
             ORDER BY cnt DESC
