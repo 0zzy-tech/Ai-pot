@@ -17,9 +17,9 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 ├──────────────────────────────┬──────────────────────────────────────┤
 │                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
 │   🌍 World Map               ├──────────────────────────────────────┤
-│   (risk-coloured pins)       │ Time     IP*           Risk Country  │
-│                              │ 14:32:01 185.220.x.x●C2📝 CRIT RU  │
-│                              │ 14:31:58 103.21.x.x TOR HIGH  CN   │
+│   (risk-coloured pins)       │ Time     IP*              Risk Ctry  │
+│                              │ 14:32:01 185.220.x.x●C2TF📝 CRIT RU│
+│                              │ 14:31:58 103.21.x.x  TOR    HIGH CN │
 │                              │  * click IP → session drawer        │
 │                              │  * click row → modal  j/k/Enter/b  │
 ├──────────┬───────────────────┴──────────────────────────────────────┤
@@ -35,7 +35,14 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  Webhook Alerts: ✓ Active · 1 URL · Format: slack · CRITICAL,HIGH  │
 │  Canary Token:   sk-pot-a1b2c3d4e5f6g7h8    [Copy]                 │
 │  Deception URL:  http://host/track/abc123    [Copy]                 │
-│  Threat Feed:    ✓ Active · 8,234 known C2 IPs · refreshed 04:00   │
+│  Feodo Feed:     ✓ Active · 8,234 C2 IPs   · refreshed 04:00       │
+│  ThreatFox Feed: ✓ Active · 12,847 IOCs    · refreshed 04:00       │
+├─────────────────────────────────────────────────────────────────────┤
+│  🔬 IP Session Drawer (click any IP)                                 │
+│  IP: 185.220.101.x   Hostname: exit-node.tor-relay.example.com     │
+│  ISP: Frantech Solutions   Country: Netherlands / Amsterdam         │
+│  AbuseIPDB: 98/100   GreyNoise: MALICIOUS — Tor exit node          │
+│  [DATACENTER] [TOR EXIT] [ThreatFox: Cobalt Strike] [C2]           │
 ├─────────────────────────────────────────────────────────────────────┤
 │  🏆 Top Attackers                                                    │
 │  Top IPs: 1. 185.220.x.x (RU) 341 req CRITICAL  2. …             │
@@ -51,7 +58,7 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  "Crypto miner"  xmrig|stratum\+  CRITICAL  [ON]  [Delete]         │
 │  Name / Pattern / Risk ▾               [Add Rule]                  │
 └─────────────────────────────────────────────────────────────────────┘
-● = high AbuseIPDB score · C2 = known Feodo botnet IP · 📝 = operator note
+● = high AbuseIPDB score · C2 = Feodo botnet · TF = ThreatFox IOC · 📝 = note
 ```
 
 ---
