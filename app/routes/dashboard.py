@@ -24,9 +24,13 @@ from app import service_registry
 from app.broadcaster import manager
 from app.database import (
     add_allowed_ip,
+    add_custom_rule,
     clear_all_requests,
+    delete_custom_rule,
     get_allowed_ips,
     get_blocked_ips,
+    get_custom_rules,
+    get_deception_callbacks,
     get_hourly_heatmap,
     get_ip_note,
     get_map_data,
@@ -39,6 +43,7 @@ from app.database import (
     get_weekly_trend,
     remove_allowed_ip,
     stream_requests_csv,
+    update_custom_rule,
 )
 from config import Config
 
@@ -354,6 +359,95 @@ async def api_delete_ip_note(ip: str, _: str = Depends(_check_auth)):
     from app import service_registry
     await service_registry.delete_ip_note(ip)
     return JSONResponse(content={"ip": ip, "note": None})
+
+
+# ── Custom detection rules ────────────────────────────────────────────────────
+
+@router.get("/api/custom-rules")
+async def api_get_custom_rules(_: str = Depends(_check_auth)):
+    return JSONResponse(content=await get_custom_rules())
+
+
+@router.post("/api/custom-rules")
+async def api_add_custom_rule(request: Request, _: str = Depends(_check_auth)):
+    body = await request.json()
+    name       = body.get("name", "").strip()
+    pattern    = body.get("pattern", "").strip()
+    risk_level = body.get("risk_level", "HIGH").upper()
+    flag_name  = body.get("flag_name", name.lower().replace(" ", "_")).strip()
+    if not name or not pattern:
+        raise HTTPException(status_code=400, detail="name and pattern required")
+    if risk_level not in {"CRITICAL", "HIGH", "MEDIUM", "LOW"}:
+        raise HTTPException(status_code=400, detail="invalid risk_level")
+    # Validate regex
+    import re
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        raise HTTPException(status_code=400, detail=f"invalid regex: {exc}")
+    rule_id = await add_custom_rule(name=name, pattern=pattern, risk_level=risk_level, flag_name=flag_name)
+    # Hot-reload
+    from app.custom_rules import reload_rules
+    reload_rules(await get_custom_rules())
+    return JSONResponse(content={"id": rule_id, "name": name, "pattern": pattern,
+                                  "risk_level": risk_level, "flag_name": flag_name})
+
+
+@router.patch("/api/custom-rules/{rule_id}")
+async def api_update_custom_rule(rule_id: int, request: Request, _: str = Depends(_check_auth)):
+    body = await request.json()
+    # Fetch existing rule to allow partial updates
+    rules = await get_custom_rules()
+    existing = next((r for r in rules if r["id"] == rule_id), None)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    merged = {**existing, **body}
+    await update_custom_rule(
+        rule_id,
+        name=merged["name"],
+        pattern=merged["pattern"],
+        risk_level=merged["risk_level"],
+        flag_name=merged["flag_name"],
+        enabled=bool(merged["enabled"]),
+    )
+    from app.custom_rules import reload_rules
+    reload_rules(await get_custom_rules())
+    return JSONResponse(content={"id": rule_id, "updated": True})
+
+
+@router.delete("/api/custom-rules/{rule_id}")
+async def api_delete_custom_rule(rule_id: int, _: str = Depends(_check_auth)):
+    await delete_custom_rule(rule_id)
+    from app.custom_rules import reload_rules
+    reload_rules(await get_custom_rules())
+    return JSONResponse(content={"id": rule_id, "deleted": True})
+
+
+# ── Deception callbacks ───────────────────────────────────────────────────────
+
+@router.get("/api/deception/callbacks")
+async def api_deception_callbacks(
+    limit: int = Query(100, ge=1, le=1000),
+    _: str = Depends(_check_auth),
+):
+    rows = await get_deception_callbacks(limit=limit)
+    return JSONResponse(content=rows)
+
+
+@router.get("/api/deception/token")
+async def api_deception_token(_: str = Depends(_check_auth)):
+    from app.deception import get_session_token
+    token = get_session_token()
+    # Build full callback URL — use the request host
+    return JSONResponse(content={"token": token})
+
+
+# ── Threat feed stats ─────────────────────────────────────────────────────────
+
+@router.get("/api/threat-feeds")
+async def api_threat_feeds(_: str = Depends(_check_auth)):
+    from app.threatfeeds import feed_stats
+    return JSONResponse(content=feed_stats())
 
 
 # ── Full CSV export ───────────────────────────────────────────────────────────

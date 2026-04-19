@@ -39,6 +39,7 @@ from app.routes import (
     comfyui,
     cohere,
     dashboard,
+    deception,
     gemini,
     huggingface,
     llamacpp,
@@ -66,6 +67,18 @@ async def lifespan(app: FastAPI):
     logger.info("Initialising database…")
     await init_db()
     await service_registry.init_service_registry()
+
+    # Load custom detection rules into memory
+    from app.database import get_custom_rules
+    from app.custom_rules import reload_rules
+    reload_rules(await get_custom_rules())
+
+    # Start background tasks (threat feed refresh, data retention, scheduled reports)
+    from app.scheduler import start_background_tasks
+    from app.threatfeeds import threat_feed_task
+    asyncio.create_task(threat_feed_task())
+    await start_background_tasks()
+
     logger.info(
         "AI Honeypot running on %s:%d  |  Dashboard: http://localhost:%d%s\n"
         "  Simulating: Ollama · Anthropic · HuggingFace TGI · llama.cpp · "
@@ -110,6 +123,7 @@ app.include_router(localai_ext.router)
 app.include_router(vllm.router)
 app.include_router(lmstudio.router)
 app.include_router(dashboard.router)
+app.include_router(deception.router)
 app.include_router(websocket.router)
 
 if Config.METRICS_ENABLED:

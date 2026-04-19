@@ -25,6 +25,7 @@ from app.database import (
     insert_request,
 )
 from app.geolocator import geolocate
+from app.threatfeeds import is_known_c2
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -142,9 +143,29 @@ async def log_request(
             from app.webhooks import fire_webhooks
             asyncio.create_task(fire_webhooks(record))
 
+        # Email alerts (non-blocking, runs in executor)
+        if Config.SMTP_HOST and Config.SMTP_TO and record["risk_level"] in Config.EMAIL_RISK_LEVELS:
+            from app.emailer import send_alert_email
+            asyncio.create_task(send_alert_email(record))
+
+        # SIEM / syslog forwarding (fire-and-forget UDP, non-blocking)
+        if Config.SYSLOG_HOST:
+            from app.syslog_forwarder import send_syslog_event
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, send_syslog_event, record)
+
+        # Deception callback — log to dedicated table when attacker follows deception URL
+        if path.startswith("/track/"):
+            from app.database import log_deception_callback
+            token = path.split("/track/", 1)[-1].split("?")[0]
+            asyncio.create_task(log_deception_callback(token, ip))
+
         # Include operator note if set for this IP
         from app import service_registry as _sr
         ip_note = _sr.get_ip_note(ip)
+
+        # Threat feed C2 check
+        c2_hit = is_known_c2(ip)
 
         # Build broadcast payload (no full headers/body — keep WS messages small)
         broadcast_data = {
@@ -165,6 +186,7 @@ async def log_request(
             "abuse_score":      rep["abuse_score"] if rep else None,
             "is_tor":           rep["is_tor"]      if rep else False,
             "note":             ip_note,
+            "is_c2":            c2_hit,
         }
         await manager.broadcast({"type": "new_request", "data": broadcast_data})
 

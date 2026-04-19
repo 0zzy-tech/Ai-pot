@@ -250,6 +250,7 @@ async def block_ip(ip: str, reason: str) -> None:
     from app.database import add_blocked_ip
     _blocked_ips.add(ip)
     await add_blocked_ip(ip, reason)
+    _export_blocklist()
     logger.info("IP blocked: %s (%s)", ip, reason)
 
 
@@ -258,7 +259,14 @@ async def unblock_ip(ip: str) -> None:
     from app.database import remove_blocked_ip
     _blocked_ips.discard(ip)
     await remove_blocked_ip(ip)
+    _export_blocklist()
     logger.info("IP unblocked: %s", ip)
+
+
+def _export_blocklist() -> None:
+    """Write blocked IPs to file if BLOCKLIST_FILE is configured."""
+    from app.blocklist_export import update_blocklist_file
+    update_blocklist_file(list(_blocked_ips))
 
 
 async def init_ip_allowlist() -> None:

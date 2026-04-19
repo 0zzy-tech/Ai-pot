@@ -73,3 +73,34 @@ class Config:
     # sha256 of ADMIN_PASSWORD — injected into the dashboard page and used as
     # a query param on the WebSocket URL so unauthenticated clients can't connect.
     WS_TOKEN = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+
+    # ── SMTP email alerting ───────────────────────────────────────────────────
+    SMTP_HOST  = os.getenv("SMTP_HOST", "")
+    SMTP_PORT  = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER  = os.getenv("SMTP_USER", "")
+    SMTP_PASS  = os.getenv("SMTP_PASS", "")
+    SMTP_FROM  = os.getenv("SMTP_FROM", "honeypot@localhost")
+    SMTP_TO    = os.getenv("SMTP_TO", "")
+    SMTP_TLS   = os.getenv("SMTP_TLS", "true").lower() == "true"
+    EMAIL_RISK_LEVELS = set(os.getenv("EMAIL_RISK_LEVELS", "CRITICAL").upper().split(","))
+
+    # ── Scheduled threat reports ──────────────────────────────────────────────
+    REPORT_SCHEDULE  = os.getenv("REPORT_SCHEDULE", "")    # "" | daily | weekly
+    REPORT_EMAIL_TO  = os.getenv("REPORT_EMAIL_TO", "")    # defaults to SMTP_TO
+
+    # ── SIEM / Syslog forwarding ──────────────────────────────────────────────
+    SYSLOG_HOST   = os.getenv("SYSLOG_HOST", "")
+    SYSLOG_PORT   = int(os.getenv("SYSLOG_PORT", "514"))
+    SYSLOG_FORMAT = os.getenv("SYSLOG_FORMAT", "json")     # json | cef
+
+    # ── Data retention ────────────────────────────────────────────────────────
+    # Requests older than this many days are purged hourly (0 = disabled)
+    MAX_REQUEST_AGE_DAYS = int(os.getenv("MAX_REQUEST_AGE_DAYS", "0"))
+
+    # ── Blocklist file export ─────────────────────────────────────────────────
+    # Write blocked IPs to a file for fail2ban / iptables consumption
+    BLOCKLIST_FILE   = os.getenv("BLOCKLIST_FILE", "")
+    BLOCKLIST_FORMAT = os.getenv("BLOCKLIST_FORMAT", "plain")   # plain | fail2ban
+
+    # ── Deception tokens ──────────────────────────────────────────────────────
+    DECEPTION_ENABLED = os.getenv("DECEPTION_ENABLED", "true").lower() == "true"

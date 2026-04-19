@@ -84,6 +84,24 @@ async def init_db() -> None:
                 note       TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS custom_rules (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL,
+                pattern    TEXT NOT NULL,
+                risk_level TEXT NOT NULL DEFAULT 'HIGH',
+                flag_name  TEXT NOT NULL,
+                enabled    INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS deception_callbacks (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                token        TEXT NOT NULL,
+                caller_ip    TEXT NOT NULL,
+                original_ip  TEXT,
+                timestamp    TEXT NOT NULL
+            );
         """)
         await db.commit()
 
@@ -613,6 +631,83 @@ async def get_all_ip_notes() -> dict[str, str]:
     async with get_db() as db:
         cur = await db.execute("SELECT ip, note FROM ip_notes")
         return {row[0]: row[1] for row in await cur.fetchall()}
+
+
+# ── Custom detection rules ─────────────────────────────────────────────────────
+
+async def get_custom_rules() -> list[dict]:
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT id, name, pattern, risk_level, flag_name, enabled, created_at "
+            "FROM custom_rules ORDER BY created_at DESC"
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def add_custom_rule(name: str, pattern: str, risk_level: str, flag_name: str) -> int:
+    async with _write_lock:
+        async with get_db() as db:
+            cur = await db.execute(
+                "INSERT INTO custom_rules (name, pattern, risk_level, flag_name, enabled, created_at) "
+                "VALUES (?, ?, ?, ?, 1, datetime('now'))",
+                (name, pattern, risk_level.upper(), flag_name),
+            )
+            await db.commit()
+            return cur.lastrowid
+
+
+async def update_custom_rule(rule_id: int, name: str, pattern: str, risk_level: str, flag_name: str, enabled: bool) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE custom_rules SET name=?, pattern=?, risk_level=?, flag_name=?, enabled=? WHERE id=?",
+                (name, pattern, risk_level.upper(), flag_name, 1 if enabled else 0, rule_id),
+            )
+            await db.commit()
+
+
+async def delete_custom_rule(rule_id: int) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute("DELETE FROM custom_rules WHERE id=?", (rule_id,))
+            await db.commit()
+
+
+# ── Deception callbacks ────────────────────────────────────────────────────────
+
+async def log_deception_callback(token: str, caller_ip: str, original_ip: Optional[str]) -> None:
+    async with _write_lock:
+        async with get_db() as db:
+            await db.execute(
+                "INSERT INTO deception_callbacks (token, caller_ip, original_ip, timestamp) "
+                "VALUES (?, ?, ?, datetime('now'))",
+                (token, caller_ip, original_ip),
+            )
+            await db.commit()
+
+
+async def get_deception_callbacks(limit: int = 50) -> list[dict]:
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT id, token, caller_ip, original_ip, timestamp "
+            "FROM deception_callbacks ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+
+# ── Data retention ─────────────────────────────────────────────────────────────
+
+async def purge_old_requests(max_age_days: int) -> int:
+    """Delete requests older than max_age_days. Returns count deleted."""
+    async with _write_lock:
+        async with get_db() as db:
+            cur = await db.execute(
+                "DELETE FROM requests WHERE timestamp < datetime('now', ? || ' days')",
+                (f"-{max_age_days}",),
+            )
+            await db.commit()
+            return cur.rowcount
 
 
 # ── CSV export ─────────────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@
   let searchDebounce    = null;
   let _currentDrawerIp  = null;
   let _currentModalData = null;
+  let _selectedRowIndex = -1;  // keyboard nav
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   function esc(str) {
@@ -72,9 +73,11 @@
       ? ` <span title="Tor exit node" style="font-size:10px;color:var(--risk-high)">TOR</span>` : '';
     const noteIndicator = d.note
       ? ` <span title="${esc(d.note)}" style="font-size:10px;cursor:pointer">📝</span>` : '';
+    const c2Badge = d.is_c2
+      ? ` <span title="Known C2 IP (Feodo Tracker)" style="font-size:10px;color:var(--risk-critical);font-weight:700">C2</span>` : '';
     return `
       <td>${fmtTime(d.timestamp)}</td>
-      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${noteIndicator}</td>
+      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${c2Badge}${noteIndicator}</td>
       <td title="${esc(d.path)}">${esc(d.path)}</td>
       <td>${riskBadge(d.risk_level)}</td>
       <td>${catChip(d.category)}</td>
@@ -135,8 +138,58 @@
         HoneypotCharts.updateRisk(data.by_risk || {});
         HoneypotCharts.updateCategory(data.by_category || {});
         HoneypotCharts.updateTimeline(data.hourly_trend || []);
+        renderLeaderboard(data);
       })
       .catch(console.warn);
+  }
+
+  // ── Leaderboard ───────────────────────────────────────────────────────────────
+
+  function renderLeaderboard(data) {
+    const total = data.total || 1;
+
+    // Top IPs
+    const ipsTbody = document.getElementById('top-ips-tbody');
+    if (ipsTbody) {
+      const ips = data.top_ips || [];
+      if (!ips.length) {
+        ipsTbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:16px">No data</td></tr>';
+      } else {
+        const RISK_COLOR = {CRITICAL:'var(--risk-critical)',HIGH:'var(--risk-high)',MEDIUM:'var(--risk-medium)',LOW:'var(--risk-low)'};
+        ipsTbody.innerHTML = ips.map((r, i) => {
+          const color = RISK_COLOR[r.max_risk] || 'var(--text-muted)';
+          return `<tr>
+            <td><span style="color:var(--text-muted);margin-right:6px">${i+1}.</span>
+                <span class="ip-cell" data-ip="${esc(r.ip)}" style="cursor:pointer">${esc(r.ip)}</span></td>
+            <td style="color:var(--text-muted)">${esc(r.country || '—')}</td>
+            <td>${r.cnt.toLocaleString()}</td>
+            <td><span class="badge badge-${esc(r.max_risk)}">${esc(r.max_risk)}</span></td>
+          </tr>`;
+        }).join('');
+        // Wire up clicks
+        ipsTbody.querySelectorAll('.ip-cell').forEach(el => {
+          el.addEventListener('click', () => openIpDrawer(el.dataset.ip));
+        });
+      }
+    }
+
+    // Top Countries
+    const ctTbody = document.getElementById('top-countries-tbody');
+    if (ctTbody) {
+      const countries = data.top_countries || [];
+      if (!countries.length) {
+        ctTbody.innerHTML = '<tr><td colspan="3" style="color:var(--text-muted);text-align:center;padding:16px">No data</td></tr>';
+      } else {
+        ctTbody.innerHTML = countries.map((r, i) => {
+          const pct = total > 0 ? ((r.cnt / total) * 100).toFixed(1) : '0.0';
+          return `<tr>
+            <td><span style="color:var(--text-muted);margin-right:6px">${i+1}.</span>${esc(r.country || '—')}</td>
+            <td>${r.cnt.toLocaleString()}</td>
+            <td style="color:var(--text-muted)">${pct}%</td>
+          </tr>`;
+        }).join('');
+      }
+    }
   }
 
   function loadMapData() {
@@ -581,6 +634,133 @@
     _refreshIpNoteDisplay(_currentDrawerIp);
   }
 
+  // ── Deception token ───────────────────────────────────────────────────────────
+
+  let _deceptionToken = '';
+
+  function loadDeceptionToken() {
+    fetch(`${ADMIN_PREFIX}/api/deception/token`)
+      .then(r => r.json())
+      .then(data => {
+        _deceptionToken = data.token || '';
+        const host = location.hostname + (location.port ? ':' + location.port : '');
+        const url = `http://${host}/track/${_deceptionToken}`;
+        const el = document.getElementById('deception-token-display');
+        if (el) el.textContent = url;
+      })
+      .catch(() => {});
+  }
+
+  function copyDeceptionToken() {
+    const el = document.getElementById('deception-token-display');
+    const result = document.getElementById('deception-copy-result');
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      if (result) result.textContent = 'Copied!';
+      showToast('Deception URL copied to clipboard');
+      setTimeout(() => { if (result) result.textContent = ''; }, 2000);
+    }).catch(() => {
+      if (result) result.textContent = 'Copy failed';
+    });
+  }
+
+  // ── Threat feed stats ─────────────────────────────────────────────────────────
+
+  function loadThreatFeedStats() {
+    fetch(`${ADMIN_PREFIX}/api/threat-feeds`)
+      .then(r => r.json())
+      .then(data => {
+        const el = document.getElementById('threat-feed-status');
+        if (!el) return;
+        if (data.c2_count > 0) {
+          const refreshed = data.last_refresh ? data.last_refresh.slice(0,19).replace('T',' ') + ' UTC' : 'never';
+          el.innerHTML = `<span style="color:var(--risk-low)">✓ Active</span> &bull; <strong>${data.c2_count.toLocaleString()}</strong> known C2 IPs &bull; Last refresh: <span style="color:var(--text-muted)">${esc(refreshed)}</span>`;
+        } else {
+          el.innerHTML = `<span style="color:var(--text-muted)">Loading… (refreshes automatically every 24h)</span>`;
+        }
+      })
+      .catch(() => {});
+  }
+
+  // ── Custom detection rules ─────────────────────────────────────────────────────
+
+  function loadCustomRules() {
+    fetch(`${ADMIN_PREFIX}/api/custom-rules`)
+      .then(r => r.json())
+      .then(rules => {
+        const badge = document.getElementById('rules-count-badge');
+        const tbody = document.getElementById('rules-tbody');
+        if (badge) badge.textContent = rules.filter(r => r.enabled).length;
+        if (!tbody) return;
+        if (!rules.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:16px">No rules defined</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rules.map(r => `
+          <tr>
+            <td>${esc(r.name)}</td>
+            <td style="font-family:monospace;font-size:12px;color:var(--risk-medium)">${esc(r.pattern)}</td>
+            <td><span class="badge badge-${esc(r.risk_level)}">${esc(r.risk_level)}</span></td>
+            <td><label class="toggle" style="vertical-align:middle">
+              <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="toggleCustomRule(${r.id}, this.checked)">
+              <span class="toggle-slider"></span>
+            </label></td>
+            <td style="color:var(--text-muted)">${(r.created_at||'').slice(0,10)}</td>
+            <td><button class="btn-reset" style="font-size:11px;color:var(--risk-critical)" onclick="deleteCustomRule(${r.id})">Delete</button></td>
+          </tr>`).join('');
+      })
+      .catch(console.warn);
+  }
+
+  function addCustomRule() {
+    const name    = (document.getElementById('rule-name-input')?.value || '').trim();
+    const pattern = (document.getElementById('rule-pattern-input')?.value || '').trim();
+    const risk    = document.getElementById('rule-risk-input')?.value || 'HIGH';
+    const result  = document.getElementById('rule-add-result');
+    if (!name || !pattern) { if (result) result.textContent = 'Name and pattern required'; return; }
+    fetch(`${ADMIN_PREFIX}/api/custom-rules`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, pattern, risk_level: risk}),
+    })
+      .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || r.status); }); return r.json(); })
+      .then(() => {
+        if (result) result.textContent = '';
+        document.getElementById('rule-name-input').value = '';
+        document.getElementById('rule-pattern-input').value = '';
+        showToast('Rule added');
+        loadCustomRules();
+      })
+      .catch(err => {
+        if (result) result.textContent = String(err.message || 'Error');
+      });
+  }
+
+  function toggleCustomRule(ruleId, enabled) {
+    fetch(`${ADMIN_PREFIX}/api/custom-rules/${ruleId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled}),
+    })
+      .then(r => r.json())
+      .then(() => loadCustomRules())
+      .catch(console.warn);
+  }
+
+  function deleteCustomRule(ruleId) {
+    if (!confirm('Delete this custom rule?')) return;
+    fetch(`${ADMIN_PREFIX}/api/custom-rules/${ruleId}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(() => { showToast('Rule deleted'); loadCustomRules(); })
+      .catch(() => showToast('Delete failed'));
+  }
+
+  function toggleRulesSection() {
+    const body = document.getElementById('rules-body');
+    if (!body) return;
+    body.style.display = body.style.display !== 'none' ? 'none' : '';
+  }
+
   // ── Webhook config ───────────────────────────────────────────────────────────
   function loadWebhookConfig() {
     fetch(`${ADMIN_PREFIX}/api/webhooks/config`)
@@ -744,6 +924,13 @@
     hint.textContent = visible ? '(click to expand)' : '(click to collapse)';
   }
 
+  function _highlightFeedRow(rows) {
+    rows.forEach((r, i) => r.classList.toggle('row-selected', i === _selectedRowIndex));
+    if (rows[_selectedRowIndex]) {
+      rows[_selectedRowIndex].scrollIntoView({block: 'nearest'});
+    }
+  }
+
   function setLiveStatus(online) {
     const dot   = document.getElementById('live-dot');
     const label = document.getElementById('live-label');
@@ -774,6 +961,9 @@
     loadCanaryToken();
     loadBlockedIps();
     loadAllowedIps();
+    loadCustomRules();
+    loadDeceptionToken();
+    loadThreatFeedStats();
     loadIntelCharts();
 
     // Update auto-block status indicator
@@ -802,7 +992,31 @@
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────────
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeRequestModal();
+      const tag = document.activeElement?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === 'Escape') {
+        closeRequestModal();
+        closeIpDrawer();
+        return;
+      }
+      if (inInput) return;
+      const rows = Array.from(document.querySelectorAll('#feed-tbody .feed-row'));
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        _selectedRowIndex = Math.min(_selectedRowIndex + 1, rows.length - 1);
+        _highlightFeedRow(rows);
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        _selectedRowIndex = Math.max(_selectedRowIndex - 1, 0);
+        _highlightFeedRow(rows);
+      } else if (e.key === 'Enter' && _selectedRowIndex >= 0 && rows[_selectedRowIndex]) {
+        const row = rows[_selectedRowIndex];
+        if (row.dataset.id) openRequestModal(Number(row.dataset.id));
+      } else if (e.key === 'b' && _selectedRowIndex >= 0 && rows[_selectedRowIndex]) {
+        const row = rows[_selectedRowIndex];
+        const ipCell = row.querySelector('.ip-cell');
+        if (ipCell) blockIp(ipCell.dataset.ip, 'keyboard block');
+      }
     });
     document.getElementById('ip-drawer-close')?.addEventListener('click', closeIpDrawer);
     document.getElementById('ip-drawer-overlay')?.addEventListener('click', closeIpDrawer);
@@ -842,19 +1056,24 @@
   });
 
   // ── Expose functions needed by HTML onclick attributes ────────────────────────
-  window.manualBlockIp       = manualBlockIp;
-  window.unblockIp           = unblockIp;
-  window.blockIpFromDrawer   = blockIpFromDrawer;
-  window.blockIpFromModal    = blockIpFromModal;
+  window.manualBlockIp        = manualBlockIp;
+  window.unblockIp            = unblockIp;
+  window.blockIpFromDrawer    = blockIpFromDrawer;
+  window.blockIpFromModal     = blockIpFromModal;
   window.toggleBlockedSection = toggleBlockedSection;
-  window.copyModalAsCurl     = copyModalAsCurl;
-  window.closeRequestModal   = closeRequestModal;
-  window.switchModalTab      = switchModalTab;
-  window.toggleModalHeaders  = toggleModalHeaders;
-  window.addAllowedIp        = addAllowedIp;
-  window.removeAllowedIp     = removeAllowedIp;
+  window.copyModalAsCurl      = copyModalAsCurl;
+  window.closeRequestModal    = closeRequestModal;
+  window.switchModalTab       = switchModalTab;
+  window.toggleModalHeaders   = toggleModalHeaders;
+  window.addAllowedIp         = addAllowedIp;
+  window.removeAllowedIp      = removeAllowedIp;
   window.toggleAllowedSection = toggleAllowedSection;
-  window.editIpNote          = editIpNote;
-  window.saveIpNote          = saveIpNote;
-  window.cancelIpNote        = cancelIpNote;
+  window.editIpNote           = editIpNote;
+  window.saveIpNote           = saveIpNote;
+  window.cancelIpNote         = cancelIpNote;
+  window.copyDeceptionToken   = copyDeceptionToken;
+  window.addCustomRule        = addCustomRule;
+  window.toggleCustomRule     = toggleCustomRule;
+  window.deleteCustomRule     = deleteCustomRule;
+  window.toggleRulesSection   = toggleRulesSection;
 })();

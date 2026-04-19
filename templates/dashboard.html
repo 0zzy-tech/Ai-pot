@@ -173,6 +173,23 @@
           <span id="canary-copy-result" class="intel-result"></span>
         </div>
       </div>
+      <!-- Deception token card -->
+      <div class="intel-card">
+        <div class="intel-card-title">🪤 Deception Token URL</div>
+        <div class="intel-card-body">
+          <span style="font-size:11px; color:var(--text-muted)">Embed this URL in fake model responses — fires CRITICAL alert when followed</span>
+          <div id="deception-token-display" style="font-family:monospace; font-size:11px; color:var(--risk-high); margin-top:6px; word-break:break-all">Loading…</div>
+        </div>
+        <div class="intel-card-actions">
+          <button id="copy-deception-btn" class="btn-reset" onclick="copyDeceptionToken()">Copy URL</button>
+          <span id="deception-copy-result" class="intel-result"></span>
+        </div>
+      </div>
+      <!-- Threat feed card -->
+      <div class="intel-card">
+        <div class="intel-card-title">🛡️ Threat Feed (Feodo C2)</div>
+        <div id="threat-feed-status" class="intel-card-body">Loading…</div>
+      </div>
     </div>
   </div>
 
@@ -238,6 +255,74 @@
         <thead><tr><th>IP</th><th>Label</th><th>Added At</th><th></th></tr></thead>
         <tbody id="allowed-tbody">
           <tr><td colspan="4" style="color:var(--text-muted); text-align:center; padding:16px">No allowed IPs</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Leaderboard ────────────────────────────────────────────────────────── -->
+  <div id="leaderboard-section">
+    <div class="services-header">
+      🏆 Top Attackers
+    </div>
+    <div id="leaderboard-grid">
+      <div class="leaderboard-panel">
+        <div class="leaderboard-title">Top IPs</div>
+        <table class="blocked-table">
+          <thead><tr><th>IP</th><th>Country</th><th>Requests</th><th>Max Risk</th></tr></thead>
+          <tbody id="top-ips-tbody">
+            <tr><td colspan="4" style="color:var(--text-muted); text-align:center; padding:16px">No data</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="leaderboard-panel">
+        <div class="leaderboard-title">Top Countries</div>
+        <table class="blocked-table">
+          <thead><tr><th>Country</th><th>Requests</th><th>% of Total</th></tr></thead>
+          <tbody id="top-countries-tbody">
+            <tr><td colspan="3" style="color:var(--text-muted); text-align:center; padding:16px">No data</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Custom Detection Rules ──────────────────────────────────────────────── -->
+  <div id="rules-section">
+    <div class="services-header" onclick="toggleRulesSection()" style="cursor:pointer">
+      🔎 Custom Detection Rules
+      <span id="rules-count-badge" class="blocked-badge" style="background:#58a6ff">0</span>
+      <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:8px">
+        Operator-defined regex patterns — trigger CRITICAL/HIGH/MEDIUM/LOW events
+      </span>
+      <span style="margin-left:auto; font-size:11px; color:var(--text-muted)">click to expand ▾</span>
+    </div>
+    <div id="rules-body" style="display:none; padding:12px 0">
+      <div style="display:flex; gap:8px; margin-bottom:12px; align-items:flex-end; flex-wrap:wrap">
+        <div style="display:flex; flex-direction:column; gap:4px">
+          <label style="font-size:11px; color:var(--text-muted)">Name</label>
+          <input id="rule-name-input" type="text" placeholder="e.g. Crypto miner" style="font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px; width:160px">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:180px">
+          <label style="font-size:11px; color:var(--text-muted)">Regex Pattern</label>
+          <input id="rule-pattern-input" type="text" placeholder="e.g. xmrig|stratum\+" style="font-family:monospace; font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px; width:100%">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px">
+          <label style="font-size:11px; color:var(--text-muted)">Risk Level</label>
+          <select id="rule-risk-input" style="font-size:13px; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 10px">
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="HIGH" selected>HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+        </div>
+        <button onclick="addCustomRule()" class="btn-reset" style="color:#58a6ff">Add Rule</button>
+        <span id="rule-add-result" class="intel-result"></span>
+      </div>
+      <table class="blocked-table">
+        <thead><tr><th>Name</th><th>Pattern</th><th>Risk</th><th>Enabled</th><th>Created</th><th></th></tr></thead>
+        <tbody id="rules-tbody">
+          <tr><td colspan="6" style="color:var(--text-muted); text-align:center; padding:16px">No rules defined</td></tr>
         </tbody>
       </table>
     </div>

@@ -369,6 +369,10 @@ def classify_request(
     """
     flagged: list[str] = []
 
+    # ── Step 0: deception callback detection ─────────────────────────────
+    if path.startswith("/track/"):
+        return "attack", "CRITICAL", ["deception_callback"]
+
     # ── Step 1: determine base category from path ─────────────────────────
     category = PATH_CATEGORY.get(path)
     if category is None:
@@ -437,6 +441,13 @@ def classify_request(
     if recent_count_60s >= 20:
         flagged.append(f"mass_scan:{recent_count_60s}_reqs_in_60s")
 
+    # Custom operator-defined rules (CRITICAL tier)
+    from app.custom_rules import match_custom_rules
+    text_to_check = body_text + " " + path
+    for flag_name, risk_level in match_custom_rules(text_to_check):
+        if risk_level == "CRITICAL":
+            flagged.append(f"custom:{flag_name}")
+
     if flagged:
         return "attack", "CRITICAL", flagged
 
@@ -462,6 +473,13 @@ def classify_request(
     # GraphQL introspection probe
     if GRAPHQL_PATTERNS.search(body_text):
         flagged.append("graphql_introspection")
+        return category, "HIGH", flagged
+
+    # Custom operator-defined rules (HIGH tier)
+    for flag_name, risk_level in match_custom_rules(text_to_check):
+        if risk_level == "HIGH":
+            flagged.append(f"custom:{flag_name}")
+    if flagged:
         return category, "HIGH", flagged
 
     # ── Step 4: check MEDIUM patterns ─────────────────────────────────────
