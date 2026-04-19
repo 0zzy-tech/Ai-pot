@@ -10,18 +10,18 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  🛡 AI HONEYPOT MONITOR          ⬇ Threat Report      ● LIVE       │
+│  🛡 AI HONEYPOT MONITOR     ⬇ Threat Report      ● LIVE            │
 ├──────────┬──────────┬──────────┬──────────┬──────────┬─────────────┤
 │ Total    │ Last 24h │ Critical │ High     │ Medium   │ Unique IPs  │
 │ 14,832   │ 1,204    │ 87       │ 342      │ 891      │ 2,341       │
 ├──────────────────────────────┬──────────────────────────────────────┤
-│                              │ 🔍 Search IP, path, body, country…  │
+│                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
 │   🌍 World Map               ├──────────────────────────────────────┤
-│   (risk-coloured pins)       │ Time     IP*          Risk  Country  │
-│                              │ 14:32:01 185.220.x.x● CRIT  Russia  │
-│                              │ 14:31:58 103.21.x.x   HIGH  China   │
-│                              │ 14:31:55 45.33.x.x    MED   US      │
-│                              │  * click row → body/headers modal   │
+│   (risk-coloured pins)       │ Time     IP*        📝  Risk Country │
+│                              │ 14:32:01 185.220.x.x●📝 CRIT Russia │
+│                              │ 14:31:58 103.21.x.x    HIGH  China  │
+│                              │  * click IP → session drawer        │
+│                              │  * click row → request modal        │
 ├──────────┬───────────────────┴──────────────────────────────────────┤
 │ Risk Pie │ Category Bar         │ 24-Hour Timeline                  │
 ├──────────┴──────────────────────┴───────────────────────────────────┤
@@ -30,7 +30,6 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 ├─────────────────────────────────────────────────────────────────────┤
 │  Simulated Platforms  (toggle to enable/disable · TRAP to tarpit)   │
 │  🦙 Ollama [ON][—] 🤖 OpenAI [ON][TRAP] 🧠 Anthropic [OFF][—]     │
-│  ⚡ vLLM [ON][—] 🖥️ LM Studio [ON][—]  💬 TextGenUI [ON][—]        │
 ├─────────────────────────────────────────────────────────────────────┤
 │  🔍 Intelligence                                                     │
 │  Webhook Alerts: ✓ Active · 1 URL · Format: slack · CRITICAL,HIGH  │
@@ -38,8 +37,11 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 ├─────────────────────────────────────────────────────────────────────┤
 │  🚫 Blocked IPs  [3]  Auto-block: on                                │
 │  185.220.x.x  auto: 3 criticals in 300s   2026-04-17  [Unblock]   │
+├─────────────────────────────────────────────────────────────────────┤
+│  ✅ Allowed IPs  [1]  Whitelisted — never logged or blocked         │
+│  192.168.1.10   my home IP   2026-04-19  [Remove]                  │
 └─────────────────────────────────────────────────────────────────────┘
-* Click any IP to open per-IP session drawer · ● = high AbuseIPDB score
+● = high AbuseIPDB score · 📝 = operator note set for this IP
 ```
 
 ---
@@ -51,6 +53,9 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **Risk classification** — CRITICAL / HIGH / MEDIUM / LOW with 40+ attack patterns
 - **Enhanced threat detection** — AWS/GCP/Azure credential exposure, SSRF, template injection, NoSQL injection, GraphQL introspection, base64-encoded payloads, credential stuffing
 - **IP blocking** — manual block from dashboard/modal/drawer, or auto-block IPs that repeatedly trigger CRITICAL alerts
+- **IP allow-list** — whitelist your own IPs so they never appear in the feed or trigger auto-block
+- **IP notes / tagging** — annotate any attacker IP with a freeform note; appears in the session drawer and live feed (📝 tooltip)
+- **CSV export** — one-click download of all (or filtered) requests as CSV; supports `?risk=`, `?category=`, `?ip=`, `?since=` filters
 - **Per-service toggle** — enable or disable any platform from the dashboard; changes take effect instantly and persist across restarts
 - **Tarpit mode** — per-service delay (default 30 s) that wastes attacker time before responding
 - **Canary tokens** — fake API key embedded in `/v1/models`; any attacker who reuses it is instantly flagged CRITICAL
@@ -59,7 +64,7 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **IP geolocation** — country, city and coordinates via ip-api.com (2-layer cache)
 - **Live dashboard** — world map with risk-coloured pins, request feed, charts, timeline
 - **Attack intelligence charts** — 7-day trend chart and hour-of-day heatmap showing when attacks peak
-- **Real-time WebSocket push** — dashboard updates on every request, no polling
+- **Real-time WebSocket push** — authenticated WebSocket (`?token=sha256(ADMIN_PASSWORD)`) delivers live updates to the dashboard without polling
 - **Request body viewer** — click any feed row to inspect headers, prettified JSON body, and flagged patterns; copy as cURL in one click
 - **Request search** — full-text search across IP, path, body, and country in the feed
 - **Per-IP session view** — click any IP to open a slide-out drawer with its complete request timeline
@@ -174,6 +179,8 @@ All settings are configurable via environment variables (ideal for Docker) or by
 | `AUTO_BLOCK_THRESHOLD` | `3` | Number of CRITICAL hits within the window to trigger auto-block |
 | `AUTO_BLOCK_WINDOW` | `300` | Time window in seconds for the auto-block threshold |
 
+> **WebSocket auth token** is derived automatically as `sha256(ADMIN_PASSWORD)` — no separate variable needed. Change `ADMIN_PASSWORD` and the token rotates with it.
+
 ---
 
 ## Risk Classification
@@ -280,6 +287,33 @@ Block attacker IPs directly from the dashboard:
 - Blocked IPs receive an instant `429 Too Many Requests` — requests are still logged so intelligence is preserved
 - Unblock any IP from the Blocked IPs panel at any time
 
+### IP Allow-list
+Prevent your own IPs from polluting the feed:
+- Add IPs (with an optional label) via the **✅ Allowed IPs** panel in the dashboard
+- Allowed IPs pass straight through the ASGI middleware — no logging, no geolocation, no auto-block
+- Persisted in SQLite and loaded into an in-memory set at startup for zero-overhead checks
+
+### IP Notes / Tagging
+Annotate attacker IPs with operator context:
+- Open any IP's session drawer → click the note area to add or edit a free-text note
+- Notes appear as a 📝 tooltip on the IP in the live feed, in the session drawer, and in the request modal
+- Notes survive restarts (stored in `ip_notes` SQLite table, cached in memory)
+- Delete a note by saving an empty string
+
+### CSV Export
+Export request data for offline analysis (Excel, Splunk, pandas, SIEM):
+- Click **⬇ Export CSV** in the feed panel header for a full download
+- Supports query filters: `?risk=CRITICAL`, `?category=attack`, `?ip=1.2.3.4`, `?since=2024-01-01`, `?limit=50000`
+- Columns: `id`, `timestamp`, `ip`, `method`, `path`, `category`, `risk_level`, `country`, `city`, `user_agent`, `flagged_patterns`, `body_snippet` (first 200 chars)
+- Streamed in batches — safe to export large datasets without memory spikes
+
+### WebSocket Security
+The real-time `/ws` endpoint is token-authenticated:
+- A `sha256(ADMIN_PASSWORD)` token is injected into the dashboard page at load time
+- The browser appends `?token=<hash>` to the WebSocket URL automatically
+- Connections without a valid token are closed immediately with WebSocket code 1008 (Policy Violation)
+- Rotating `ADMIN_PASSWORD` instantly invalidates any existing unauthorised connections
+
 ### Attack Intelligence Charts
 Two new charts below the standard risk/category/timeline charts:
 - **7-Day Trend** — stacked bar chart showing CRITICAL / HIGH / MEDIUM / LOW request counts per day for the last week
@@ -334,38 +368,43 @@ docker buildx build \
 Attacker
     │
     ▼ Port 11434
-┌────────────────────────────────────────────────────────┐
-│  FastAPI Middleware                                     │
-│    1. Read body                                        │
-│    2. IP block gate — blocked IP? → 429 (logged)       │
-│    3. Service gate — disabled service? → 404 (logged)  │
-│    4. Tarpit delay (if enabled for this service)       │
-│    5. Route to matching fake handler                   │
-│    6. asyncio.create_task(log_request) ← never blocks  │
-└───────────┬────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  FastAPI Middleware (_CaptureMiddleware)                    │
+│    1. Read body                                            │
+│    2. Allow-list gate — whitelisted IP? → pass (no log)    │
+│    3. IP block gate  — blocked IP? → 429 (still logged)    │
+│    4. Service gate   — disabled service? → 404 (logged)    │
+│    5. Tarpit delay   — if enabled for this service         │
+│    6. Route to matching fake handler                       │
+│    7. asyncio.create_task(log_request) ← never blocks      │
+└───────────┬────────────────────────────────────────────────┘
             │
-   ┌────────▼─────────┐
-   │  Logger pipeline  │
-   │  ├─ Classifier    │  sync regex + canary check → (category, risk, flags)
-   │  ├─ Geolocator    │  async, 2-layer cache (memory + SQLite)
-   │  ├─ SQLite write  │  aiosqlite, single write lock
-   │  ├─ WS broadcast  │  fan-out to all dashboard clients
-   │  └─ Webhooks      │  async POST to Slack/Discord/JSON endpoints
-   └────────┬──────────┘
-            │ WebSocket
-   ┌────────▼──────────────────────────────┐
-   │  Dashboard  /__admin  (HTTP Basic Auth)│
-   │  ├─ World map       Leaflet + CartoDB  │
-   │  ├─ Request feed    live + search      │
-   │  ├─ Request modal   body/headers/cURL  │
-   │  ├─ IP session view slide-out drawer   │
-   │  ├─ Charts          risk/cat/24h/7d    │
-   │  ├─ Heatmap         hour-of-day grid   │
-   │  ├─ Service panel   enable + tarpit    │
-   │  ├─ Blocked IPs     manual + auto      │
-   │  ├─ Intelligence    webhooks + canary  │
-   │  └─ Threat report   HTML download      │
-   └───────────────────────────────────────┘
+   ┌────────▼──────────┐
+   │  Logger pipeline   │
+   │  ├─ Classifier     │  sync regex + canary → (category, risk, flags)
+   │  ├─ Geolocator     │  async, 2-layer cache (memory + SQLite)
+   │  ├─ AbuseIPDB      │  optional reputation check (cached)
+   │  ├─ IP notes       │  attach operator note to broadcast if set
+   │  ├─ Auto-block     │  CRITICAL threshold check → block + broadcast
+   │  ├─ SQLite write   │  aiosqlite, single write lock
+   │  ├─ WS broadcast   │  fan-out to authenticated dashboard clients
+   │  └─ Webhooks       │  async POST to Slack/Discord/JSON endpoints
+   └────────┬───────────┘
+            │ WebSocket (token-authenticated)
+   ┌────────▼────────────────────────────────────┐
+   │  Dashboard  /__admin  (HTTP Basic Auth)      │
+   │  ├─ World map         Leaflet + CartoDB      │
+   │  ├─ Request feed      live + search + CSV ⬇  │
+   │  ├─ Request modal     body/headers/cURL      │
+   │  ├─ IP session view   drawer + note editor   │
+   │  ├─ Charts            risk/cat/24h/7d        │
+   │  ├─ Heatmap           hour-of-day grid       │
+   │  ├─ Service panel     enable + tarpit        │
+   │  ├─ Blocked IPs       manual + auto-block    │
+   │  ├─ Allowed IPs       whitelist panel        │
+   │  ├─ Intelligence      webhooks + canary      │
+   │  └─ Threat report     HTML download          │
+   └─────────────────────────────────────────────┘
 ```
 
 ---
