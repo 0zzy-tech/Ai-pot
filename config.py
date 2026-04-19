@@ -17,7 +17,7 @@ class Config:
     DB_PATH = os.getenv("DB_PATH", "honeypot.db")
 
     # ── Geolocation ───────────────────────────────────────────────────────────
-    GEO_API_URL = "http://ip-api.com/json/{ip}?fields=status,country,city,lat,lon,as"
+    GEO_API_URL = "http://ip-api.com/json/{ip}?fields=status,country,city,lat,lon,as,isp,hosting"
     GEO_CACHE_TTL_HOURS    = int(os.getenv("GEO_CACHE_TTL_HOURS", "24"))
     GEO_MEMORY_CACHE_SIZE  = int(os.getenv("GEO_MEMORY_CACHE_SIZE", "1000"))
 
@@ -104,3 +104,7 @@ class Config:
 
     # ── Deception tokens ──────────────────────────────────────────────────────
     DECEPTION_ENABLED = os.getenv("DECEPTION_ENABLED", "true").lower() == "true"
+
+    # ── GreyNoise ─────────────────────────────────────────────────────────────
+    # Get a free API key at https://www.greynoise.io/
+    GREYNOISE_API_KEY = os.getenv("GREYNOISE_API_KEY", "")

@@ -222,6 +222,27 @@ async def api_ip_requests(ip: str, _: str = Depends(_check_auth)):
     return JSONResponse(content=rows)
 
 
+@router.get("/api/ip/{ip}/enrichment")
+async def api_ip_enrichment(ip: str, _: str = Depends(_check_auth)):
+    """Cached enrichment data for a single IP (geo, reputation, feeds)."""
+    from app.database import get_ip_cache
+    cached = await get_ip_cache(ip)
+    if not cached:
+        return JSONResponse(content={})
+    return JSONResponse(content={
+        "isp":                      cached.get("isp"),
+        "hosting":                  bool(cached.get("hosting")) if cached.get("hosting") is not None else None,
+        "reverse_dns":              cached.get("reverse_dns"),
+        "abuse_score":              cached.get("abuse_score"),
+        "is_tor":                   bool(cached.get("is_tor")) if cached.get("is_tor") is not None else False,
+        "threatfox_hit":            cached.get("threatfox_hit"),
+        "greynoise_classification": cached.get("greynoise_classification"),
+        "greynoise_noise":          bool(cached.get("greynoise_noise")) if cached.get("greynoise_noise") is not None else None,
+        "greynoise_riot":           bool(cached.get("greynoise_riot")) if cached.get("greynoise_riot") is not None else None,
+        "greynoise_name":           cached.get("greynoise_name"),
+    })
+
+
 # ── Webhook config + test ─────────────────────────────────────────────────────
 
 @router.get("/api/webhooks/config")

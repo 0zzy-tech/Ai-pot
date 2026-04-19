@@ -59,6 +59,8 @@ async def geolocate(ip: str) -> Optional[dict]:
             "lat":     cached["lat"],
             "lng":     cached["lng"],
             "asn":     cached["asn"],
+            "isp":     cached.get("isp"),
+            "hosting": bool(cached["hosting"]) if cached.get("hosting") is not None else None,
         }
         _cache_put(ip, geo)
         return geo
@@ -80,6 +82,8 @@ async def geolocate(ip: str) -> Optional[dict]:
             "lat":     data.get("lat"),
             "lng":     data.get("lon"),
             "asn":     data.get("as"),
+            "isp":     data.get("isp"),
+            "hosting": data.get("hosting"),
         }
         _cache_put(ip, geo)
         await set_ip_cache(ip, geo)

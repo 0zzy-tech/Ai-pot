@@ -122,6 +122,13 @@ async def init_db() -> None:
         "abuse_reports INTEGER",
         "is_tor INTEGER",
         "isp TEXT",
+        "hosting INTEGER",
+        "reverse_dns TEXT",
+        "threatfox_hit TEXT",
+        "greynoise_noise INTEGER",
+        "greynoise_riot INTEGER",
+        "greynoise_classification TEXT",
+        "greynoise_name TEXT",
     ]:
         try:
             async with _write_lock:
@@ -318,7 +325,10 @@ async def get_ip_cache(ip: str) -> Optional[dict]:
         cur = await db.execute(
             """
             SELECT country, city, lat, lng, asn, cached_at,
-                   abuse_score, abuse_reports, is_tor, isp
+                   abuse_score, abuse_reports, is_tor, isp,
+                   hosting, reverse_dns, threatfox_hit,
+                   greynoise_noise, greynoise_riot,
+                   greynoise_classification, greynoise_name
             FROM ip_cache
             WHERE ip = ?
               AND cached_at >= datetime('now', ? || ' hours')
@@ -336,8 +346,11 @@ async def set_ip_cache(ip: str, geo: dict) -> None:
                 """
                 INSERT OR REPLACE INTO ip_cache
                     (ip, country, city, lat, lng, asn, cached_at,
-                     abuse_score, abuse_reports, is_tor, isp)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+                     abuse_score, abuse_reports, is_tor, isp,
+                     hosting, reverse_dns, threatfox_hit,
+                     greynoise_noise, greynoise_riot,
+                     greynoise_classification, greynoise_name)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ip,
@@ -350,6 +363,13 @@ async def set_ip_cache(ip: str, geo: dict) -> None:
                     geo.get("abuse_reports"),
                     1 if geo.get("is_tor") else 0 if "is_tor" in geo else None,
                     geo.get("isp"),
+                    1 if geo.get("hosting") else 0 if "hosting" in geo else None,
+                    geo.get("reverse_dns"),
+                    geo.get("threatfox_hit"),
+                    1 if geo.get("greynoise_noise") else 0 if "greynoise_noise" in geo else None,
+                    1 if geo.get("greynoise_riot") else 0 if "greynoise_riot" in geo else None,
+                    geo.get("greynoise_classification"),
+                    geo.get("greynoise_name"),
                 ),
             )
             await db.commit()

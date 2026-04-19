@@ -83,6 +83,12 @@ async def log_request(
         # Geolocate (cached)
         geo = await geolocate(ip)
 
+        # Reverse DNS (own in-memory LRU cache — one lookup per IP per process)
+        rdns = None
+        if geo is not None and ip not in {"unknown", "127.0.0.1", "::1"}:
+            from app.reversedns import lookup_reverse_dns
+            rdns = await lookup_reverse_dns(ip)
+
         # AbuseIPDB reputation check (cached in ip_cache alongside geo data)
         rep = None
         if Config.ABUSEIPDB_API_KEY and ip not in {"unknown", "127.0.0.1", "::1"}:
@@ -100,7 +106,31 @@ async def log_request(
                 rep = await check_reputation(ip)
                 if rep and geo:
                     # Merge reputation into geo dict so set_ip_cache persists both
-                    merged = {**geo, **rep}
+                    merged = {**geo, **rep, "reverse_dns": rdns}
+                    await set_ip_cache(ip, merged)
+        elif geo:
+            # No AbuseIPDB key — still persist geo + reverse DNS
+            from app.database import set_ip_cache
+            await set_ip_cache(ip, {**geo, "reverse_dns": rdns})
+
+        # GreyNoise classification (cached in ip_cache)
+        gn = None
+        if Config.GREYNOISE_API_KEY and ip not in {"unknown", "127.0.0.1", "::1"}:
+            from app.greynoise import check_greynoise
+            from app.database import get_ip_cache, set_ip_cache
+            gn_cached = await get_ip_cache(ip)
+            if gn_cached and gn_cached.get("greynoise_classification") is not None:
+                gn = {
+                    "greynoise_noise":          bool(gn_cached.get("greynoise_noise")),
+                    "greynoise_riot":           bool(gn_cached.get("greynoise_riot")),
+                    "greynoise_classification": gn_cached.get("greynoise_classification"),
+                    "greynoise_name":           gn_cached.get("greynoise_name"),
+                }
+            else:
+                gn = await check_greynoise(ip)
+                if gn:
+                    merged = {**(geo or {}), **(rep or {}), "reverse_dns": rdns, **gn}
+                    from app.database import set_ip_cache
                     await set_ip_cache(ip, merged)
 
         record = {
@@ -164,8 +194,10 @@ async def log_request(
         from app import service_registry as _sr
         ip_note = _sr.get_ip_note(ip)
 
-        # Threat feed C2 check
+        # Threat feed checks (sync in-memory lookups)
         c2_hit = is_known_c2(ip)
+        from app.threatfox import get_threatfox_hit
+        threatfox_hit = get_threatfox_hit(ip)
 
         # Build broadcast payload (no full headers/body — keep WS messages small)
         broadcast_data = {
@@ -187,6 +219,14 @@ async def log_request(
             "is_tor":           rep["is_tor"]      if rep else False,
             "note":             ip_note,
             "is_c2":            c2_hit,
+            "isp":              geo.get("isp")     if geo else None,
+            "hosting":          geo.get("hosting") if geo else None,
+            "reverse_dns":      rdns,
+            "threatfox_hit":    threatfox_hit,
+            "greynoise_classification": gn["greynoise_classification"] if gn else None,
+            "greynoise_noise":          gn["greynoise_noise"]          if gn else None,
+            "greynoise_riot":           gn["greynoise_riot"]           if gn else None,
+            "greynoise_name":           gn["greynoise_name"]           if gn else None,
         }
         await manager.broadcast({"type": "new_request", "data": broadcast_data})
 

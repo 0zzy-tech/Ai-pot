@@ -405,20 +405,41 @@
     // Load current note
     _refreshIpNoteDisplay(ip);
 
-    fetch(`${ADMIN_PREFIX}/api/ip/${encodeURIComponent(ip)}/requests`)
-      .then(r => r.json())
-      .then(rows => {
+    const reqsPromise = fetch(`${ADMIN_PREFIX}/api/ip/${encodeURIComponent(ip)}/requests`).then(r => r.json());
+    const enrichPromise = fetch(`${ADMIN_PREFIX}/api/ip/${encodeURIComponent(ip)}/enrichment`).then(r => r.json()).catch(() => ({}));
+
+    Promise.all([reqsPromise, enrichPromise])
+      .then(([rows, enrich]) => {
         if (!rows.length) {
           body.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No requests found.</div>';
           return;
         }
         const geo = rows.find(r => r.country);
+
+        // Build enrichment badges
+        const badges = [];
+        if (enrich.hosting)                  badges.push(`<span class="badge" style="background:rgba(210,153,34,.18);color:var(--risk-high)">DATACENTER</span>`);
+        if (enrich.is_tor)                   badges.push(`<span class="badge badge-CRITICAL">TOR EXIT</span>`);
+        if (enrich.threatfox_hit)            badges.push(`<span class="badge badge-CRITICAL">ThreatFox: ${esc(enrich.threatfox_hit)}</span>`);
+        if (enrich.greynoise_riot)           badges.push(`<span class="badge" style="background:rgba(63,185,80,.18);color:var(--risk-low)">RIOT</span>`);
+        if (enrich.greynoise_classification === 'malicious') badges.push(`<span class="badge badge-CRITICAL">GreyNoise: MALICIOUS</span>`);
+        if (enrich.greynoise_classification === 'benign')    badges.push(`<span class="badge badge-LOW">GreyNoise: BENIGN</span>`);
+
+        const gnLabel = enrich.greynoise_name
+          ? `${enrich.greynoise_classification || 'unknown'} — ${enrich.greynoise_name}`
+          : enrich.greynoise_classification || null;
+
         const meta = `
           <div class="ip-meta">
             <span><strong>IP:</strong> ${esc(ip)}</span>
+            ${enrich.reverse_dns ? `<span><strong>Hostname:</strong> ${esc(enrich.reverse_dns)}</span>` : ''}
+            ${enrich.isp ? `<span><strong>ISP:</strong> ${esc(enrich.isp)}</span>` : ''}
             ${geo ? `<span><strong>Country:</strong> ${esc(geo.country)}</span>` : ''}
             ${geo ? `<span><strong>City:</strong> ${esc(geo.city || '—')}</span>` : ''}
             <span><strong>Requests:</strong> ${rows.length}</span>
+            ${enrich.abuse_score != null ? `<span><strong>AbuseIPDB:</strong> ${enrich.abuse_score}/100</span>` : ''}
+            ${gnLabel ? `<span><strong>GreyNoise:</strong> ${esc(gnLabel)}</span>` : ''}
+            ${badges.length ? `<span>${badges.join(' ')}</span>` : ''}
           </div>`;
         const tbRows = rows.map(r => `
           <tr>

@@ -76,7 +76,9 @@ async def lifespan(app: FastAPI):
     # Start background tasks (threat feed refresh, data retention, scheduled reports)
     from app.scheduler import start_background_tasks
     from app.threatfeeds import threat_feed_task
+    from app.threatfox import threatfox_task
     asyncio.create_task(threat_feed_task())
+    asyncio.create_task(threatfox_task())
     await start_background_tasks()
 
     logger.info(

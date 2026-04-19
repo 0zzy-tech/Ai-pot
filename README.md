@@ -74,6 +74,10 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **IP allow-list** — whitelist your own IPs so they never appear in the feed or trigger auto-block
 - **IP notes / tagging** — annotate any attacker IP with a freeform note; appears in the session drawer and live feed (📝 tooltip)
 - **CSV export** — one-click download of all (or filtered) requests as CSV; supports `?risk=`, `?category=`, `?ip=`, `?since=` filters
+- **ISP & datacenter detection** — ISP name and datacenter/hosting flag extracted from ip-api.com (free tier, no extra key); shown in the IP session drawer
+- **Reverse DNS** — PTR hostname lookup for every attacker IP; cached and displayed in the session drawer (e.g. `exit-node.tor.example.com`)
+- **ThreatFox feed** — [abuse.ch](https://threatfox.abuse.ch/) malware C2 IOC feed (no API key, refreshes every 24 h); IPs matched against known botnet infrastructure with the malware family name shown as a badge
+- **GreyNoise integration** — community API classifies IPs as mass internet scanner noise vs targeted attack; `RIOT` flag identifies known-benign infrastructure (Googlebot, Shodan, etc.); requires free `GREYNOISE_API_KEY`
 - **Top Attackers leaderboard** — Top 10 IPs and Top 10 countries ranked by request count, updated on every stats refresh
 - **Keyboard navigation** — `j`/`k` navigate feed rows, `Enter` opens request modal, `b` blocks the selected IP, `Escape` closes modals
 - **Per-service toggle** — enable or disable any platform from the dashboard; changes take effect instantly and persist across restarts
@@ -244,6 +248,7 @@ All settings are configurable via environment variables (ideal for Docker) or by
 |---|---|---|
 | `ABUSEIPDB_API_KEY` | _(empty)_ | [AbuseIPDB](https://www.abuseipdb.com/register) API key — enables reputation checks |
 | `ABUSEIPDB_MAX_AGE_DAYS` | `90` | Max report age used in AbuseIPDB queries |
+| `GREYNOISE_API_KEY` | _(empty)_ | [GreyNoise](https://www.greynoise.io/) community API key — classifies IPs as noise/malicious/benign |
 | `METRICS_ENABLED` | `false` | Set to `true` to expose `/metrics` in Prometheus text format |
 | `METRICS_TOKEN` | _(empty)_ | Optional Bearer token to protect the `/metrics` endpoint |
 | `DECEPTION_ENABLED` | `true` | Generate deception token URL shown in Intelligence panel |
@@ -375,6 +380,31 @@ docker run ... -e BLOCKLIST_FILE=/data/blocked.txt -e BLOCKLIST_FORMAT=fail2ban 
 ```
 
 Mount the file into your host and configure fail2ban to read it, or use it directly with `iptables`.
+
+### ISP & Datacenter Detection
+The ip-api.com free tier returns the ISP name and a `hosting` flag for every attacker IP. Both are shown in the IP session drawer:
+- **ISP** — carrier or hosting provider name (e.g. "DigitalOcean", "Alibaba Cloud", "Deutsche Telekom")
+- **DATACENTER badge** — shown when the IP belongs to a hosting or cloud provider rather than a residential ISP
+
+No API key required; extracted alongside standard geolocation data.
+
+### Reverse DNS
+A PTR record lookup (`gethostbyaddr`) is performed for every new public IP and cached alongside geo data. The hostname appears in the session drawer — `exit-node.tor.example.com`, `scan.example-security.com`, etc. — often revealing the attacker's infrastructure at a glance.
+
+### ThreatFox Feed Integration
+The honeypot downloads the [ThreatFox](https://threatfox.abuse.ch/) IP:port IOC feed at startup and refreshes it every 24 hours (no API key required):
+- IPs matching known malware C2 infrastructure get a red **ThreatFox** badge in the session drawer showing the malware family (e.g. "Cobalt Strike", "Mirai", "AsyncRAT")
+- Feed statistics (IOC count, last refresh time) are logged at startup
+- The lookup is synchronous and in-memory — zero overhead on the hot path
+
+### GreyNoise Classification
+Set `GREYNOISE_API_KEY` to classify every attacker IP via the [GreyNoise](https://www.greynoise.io/) community API:
+- **MALICIOUS** — targeted attacker, not mass-internet noise
+- **BENIGN** — known safe infrastructure (Googlebot, Shodan, Censys, academic scanners)
+- **RIOT** badge — IP belongs to known benign internet infrastructure; safe to deprioritise
+- **noise** flag — IP is a mass scanner generating background internet noise vs a targeted attacker
+
+Results are cached in `ip_cache` and shown in the session drawer. Free community tier covers 1,000 checks/day.
 
 ### Top Attackers Leaderboard
 The **🏆 Top Attackers** section below the intelligence charts shows:
@@ -543,8 +573,10 @@ Attacker
    │  Logger pipeline       │
    │  ├─ Classifier         │  sync regex + canary + custom rules
    │  ├─ Geolocator         │  async, 2-layer cache (memory + SQLite)
+   │  ├─ Reverse DNS        │  async PTR lookup in thread executor (cached)
    │  ├─ AbuseIPDB          │  optional reputation check (cached)
-   │  ├─ Threat feed        │  sync C2 IP lookup (Feodo Tracker)
+   │  ├─ GreyNoise          │  optional noise/malicious classification (cached)
+   │  ├─ Threat feeds       │  sync C2 lookup (Feodo Tracker + ThreatFox)
    │  ├─ IP notes           │  attach operator note to broadcast
    │  ├─ Auto-block         │  CRITICAL threshold check → block + broadcast
    │  ├─ SQLite write       │  aiosqlite, single write lock
@@ -574,6 +606,7 @@ Attacker
 
 Background tasks (asyncio):
    ├─ Feodo Tracker feed refresh  (every 24 h)
+   ├─ ThreatFox IOC feed refresh  (every 24 h)
    ├─ Data retention purge        (every 1 h)
    └─ Scheduled threat report     (daily / weekly)
 ```
