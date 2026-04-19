@@ -18,7 +18,7 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
 │   🌍 World Map               ├──────────────────────────────────────┤
 │   (risk-coloured pins)       │ Time     IP*              Risk Ctry  │
-│                              │ 14:32:01 185.220.x.x●C2TF📝 CRIT RU│
+│                              │ 14:32:01 185.220.x.x●C2TF ANOMALY BOT CRIT RU│
 │                              │ 14:31:58 103.21.x.x  TOR    HIGH CN │
 │                              │  * click IP → session drawer        │
 │                              │  * click row → modal  j/k/Enter/b  │
@@ -59,9 +59,16 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  "Crypto miner"  xmrig|stratum\+  CRITICAL  [ON]  [Delete]         │
 │  Name / Pattern / Risk ▾               [Add Rule]                  │
 ├─────────────────────────────────────────────────────────────────────┤
+│  🤖 ML Intelligence  (collapsible)                                   │
+│  Model Status:  ✓ Trained · 2,341 samples · last: 2026-04-19 14:00 │
+│  Anomaly Detection:  12 anomalies in last 24h  (Isolation Forest)   │
+│  Bot Detection:      8 high-confidence bots ≥80%  (Random Forest)  │
+│  Attack Clusters:    3 active clusters  (DBSCAN)                    │
+│    Cluster 0: 12 IPs · CRITICAL   Cluster 1: 7 IPs · HIGH          │
+├─────────────────────────────────────────────────────────────────────┤
 │  ABOUT ▾  (collapsible — built by Ozzytech · Martyn Oswald)         │
 └─────────────────────────────────────────────────────────────────────┘
-● = high AbuseIPDB score · C2 = Feodo botnet · TF = ThreatFox IOC · 📝 = note
+● = high AbuseIPDB score · C2 = Feodo botnet · TF = ThreatFox IOC · 📝 = note · ANOMALY/BOT = ML flags
 ```
 
 ---
@@ -104,8 +111,9 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **Per-IP session view** — click any IP to open a slide-out drawer with its complete request timeline
 - **Threat report** — one-click self-contained HTML download with top IPs, paths, patterns, and geo breakdown
 - **Prometheus metrics** — optional `/metrics` endpoint for Grafana / alertmanager integration
+- **TinyML on-device intelligence** — 4 scikit-learn models run entirely in-process; no cloud, no GPU; Raspberry Pi compatible (~120 MB RAM overhead)
 - **Multi-arch Docker image** — `linux/amd64`, `linux/arm64`, `linux/arm/v7`
-- **Lightweight** — single async worker, SQLite only, <384 MB RAM on Raspberry Pi 4
+- **Lightweight** — single async worker, SQLite only, <512 MB RAM on Raspberry Pi 4
 
 ---
 
@@ -417,6 +425,47 @@ Set `GREYNOISE_API_KEY` to classify every attacker IP via the [GreyNoise](https:
 
 Results are cached in `ip_cache` and shown in the session drawer. Free community tier covers 1,000 checks/day.
 
+### TinyML On-Device Intelligence
+Four scikit-learn models run entirely in-process — no cloud API, no GPU, no separate service. All inference happens in microseconds per request. Designed to run alongside the honeypot on a Raspberry Pi 4.
+
+#### Models
+
+| Model | Algorithm | What it detects |
+|---|---|---|
+| **Anomaly Detection** | Isolation Forest | Requests that look unusual compared to your baseline traffic — catches novel attacks not covered by regex rules |
+| **Attack Clustering** | DBSCAN | Groups attacker IPs by behavioural fingerprint — spot coordinated campaigns where multiple IPs run the same scanner |
+| **Risk Enhancement** | Random Forest | Continuous 0–1 probability trained on your historical `risk_level` labels — catches misclassified requests |
+| **Bot Detection** | Random Forest | Scores sessions as automated vs human based on timing regularity, path diversity, and user-agent consistency |
+
+#### Dashboard
+The collapsible **🤖 ML Intelligence** panel shows:
+- **Model status** — trained / warming up / sample count / last training time
+- **Anomaly count** — requests flagged anomalous in the last 24 h
+- **Bot detection count** — high-confidence bot sessions (≥ 80%)
+- **Attack clusters** — number of active clusters with IP counts and max risk
+
+#### Feed badges
+- **ANOMALY** (purple) — request anomaly score ≥ 0.75
+- **BOT** (blue) — session bot probability ≥ 80%
+
+#### Training schedule
+- **Cold start**: models are `None` — all scores return `None` gracefully, no errors
+- **First train**: triggered automatically when 100+ requests exist in the database
+- **Retrain**: every 200 new requests or every 60 minutes, whichever comes first
+- **Runs in**: a thread executor — never blocks the async event loop
+
+#### Raspberry Pi sizing
+| Component | RAM | CPU time (Pi 4) |
+|---|---|---|
+| scikit-learn import | ~80 MB | 2 s startup |
+| All 4 models loaded | ~40 MB | — |
+| Per-request inference | negligible | < 1 ms |
+| Training (1,000 samples) | ~50 MB peak | ~5 s |
+
+Models are saved to `/data/ml_models/` via joblib and reloaded on restart. Total overhead: ~120 MB RAM, ~2 s extra startup.
+
+API: `GET /__admin/api/ml/stats` — returns model status, training counts, and cluster summary.
+
 ### Top Attackers Leaderboard
 The **🏆 Top Attackers** section below the intelligence charts shows:
 - **Top IPs** — the 10 most active attacker IPs with country, request count, and max risk level; click any IP to open its session drawer
@@ -588,6 +637,7 @@ Attacker
    │  ├─ AbuseIPDB          │  optional reputation check (cached)
    │  ├─ GreyNoise          │  optional noise/malicious classification (cached)
    │  ├─ Threat feeds       │  sync C2 lookup (Feodo Tracker + ThreatFox)
+   │  ├─ ML engine          │  anomaly score + bot probability (scikit-learn)
    │  ├─ IP notes           │  attach operator note to broadcast
    │  ├─ Auto-block         │  CRITICAL threshold check → block + broadcast
    │  ├─ SQLite write       │  aiosqlite, single write lock
@@ -612,12 +662,14 @@ Attacker
    │  ├─ Blocked IPs         manual + auto-block      │
    │  ├─ Allowed IPs         whitelist panel          │
    │  ├─ Custom Rules        regex CRUD + hot-reload  │
+   │  ├─ ML Intelligence     anomaly/bot/cluster panel│
    │  └─ Threat report       HTML download            │
    └─────────────────────────────────────────────────┘
 
 Background tasks (asyncio):
    ├─ Feodo Tracker feed refresh  (every 24 h)
    ├─ ThreatFox IOC feed refresh  (every 24 h)
+   ├─ ML model training loop      (every 200 req or 60 min)
    ├─ Data retention purge        (every 1 h)
    └─ Scheduled threat report     (daily / weekly)
 ```
