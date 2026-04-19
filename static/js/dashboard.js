@@ -380,14 +380,14 @@
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────────────
-  function toggleAbout() {
-    const body     = document.getElementById('about-body');
-    const chevron  = document.getElementById('about-chevron');
+  window.toggleAbout = function () {
+    const body    = document.getElementById('about-body');
+    const chevron = document.getElementById('about-chevron');
     if (!body) return;
     const open = body.style.display === 'none';
     body.style.display = open ? 'block' : 'none';
     chevron.style.transform = open ? 'rotate(180deg)' : '';
-  }
+  };
 
   function showToast(msg, duration = 3000) {
     const el = document.getElementById('toast');
