@@ -30,7 +30,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui,
 /* ── Layout ──────────────────────────────────────────────────────────── */
 .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
-.content-area { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.content-area { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 
 /* ── Header ──────────────────────────────────────────────────────────── */
 header {
