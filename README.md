@@ -17,11 +17,11 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 ├──────────────────────────────┬──────────────────────────────────────┤
 │                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
 │   🌍 World Map               ├──────────────────────────────────────┤
-│   (risk-coloured pins)       │ Time     IP*        📝  Risk Country │
-│                              │ 14:32:01 185.220.x.x●📝 CRIT Russia │
-│                              │ 14:31:58 103.21.x.x    HIGH  China  │
+│   (risk-coloured pins)       │ Time     IP*           Risk Country  │
+│                              │ 14:32:01 185.220.x.x●C2📝 CRIT RU  │
+│                              │ 14:31:58 103.21.x.x TOR HIGH  CN   │
 │                              │  * click IP → session drawer        │
-│                              │  * click row → request modal        │
+│                              │  * click row → modal  j/k/Enter/b  │
 ├──────────┬───────────────────┴──────────────────────────────────────┤
 │ Risk Pie │ Category Bar         │ 24-Hour Timeline                  │
 ├──────────┴──────────────────────┴───────────────────────────────────┤
@@ -34,14 +34,24 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  🔍 Intelligence                                                     │
 │  Webhook Alerts: ✓ Active · 1 URL · Format: slack · CRITICAL,HIGH  │
 │  Canary Token:   sk-pot-a1b2c3d4e5f6g7h8    [Copy]                 │
+│  Deception URL:  http://host/track/abc123    [Copy]                 │
+│  Threat Feed:    ✓ Active · 8,234 known C2 IPs · refreshed 04:00   │
+├─────────────────────────────────────────────────────────────────────┤
+│  🏆 Top Attackers                                                    │
+│  Top IPs: 1. 185.220.x.x (RU) 341 req CRITICAL  2. …             │
+│  Top Countries: 1. China 38.2%  2. Russia 21.1%  3. US 9.4%       │
 ├─────────────────────────────────────────────────────────────────────┤
 │  🚫 Blocked IPs  [3]  Auto-block: on                                │
 │  185.220.x.x  auto: 3 criticals in 300s   2026-04-17  [Unblock]   │
 ├─────────────────────────────────────────────────────────────────────┤
 │  ✅ Allowed IPs  [1]  Whitelisted — never logged or blocked         │
 │  192.168.1.10   my home IP   2026-04-19  [Remove]                  │
+├─────────────────────────────────────────────────────────────────────┤
+│  🔎 Custom Detection Rules  [2]  Operator regex patterns            │
+│  "Crypto miner"  xmrig|stratum\+  CRITICAL  [ON]  [Delete]         │
+│  Name / Pattern / Risk ▾               [Add Rule]                  │
 └─────────────────────────────────────────────────────────────────────┘
-● = high AbuseIPDB score · 📝 = operator note set for this IP
+● = high AbuseIPDB score · C2 = known Feodo botnet IP · 📝 = operator note
 ```
 
 ---
@@ -52,10 +62,20 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **Streaming responses** — word-by-word token streaming at realistic GPU speed (~25 tok/s)
 - **Risk classification** — CRITICAL / HIGH / MEDIUM / LOW with 40+ attack patterns
 - **Enhanced threat detection** — AWS/GCP/Azure credential exposure, SSRF, template injection, NoSQL injection, GraphQL introspection, base64-encoded payloads, credential stuffing
+- **Custom detection rules** — define your own regex patterns via the dashboard UI; assigned to any risk level; hot-reloaded instantly, no restart needed
+- **Threat feed integration** — [Feodo Tracker](https://feodotracker.abuse.ch/) C2 blocklist downloaded at startup and refreshed every 24 h; matched IPs get a `C2` badge in the live feed
+- **Deception tokens** — a trackable URL is shown in the Intelligence panel; embed it in fake model responses; any attacker who follows it fires a CRITICAL `deception_callback` alert
+- **Email alerts** — SMTP (stdlib, no extra deps) sends HTML alerts for CRITICAL/HIGH events; configure with `SMTP_HOST`, `SMTP_TO`, etc.
+- **Scheduled reports** — daily or weekly HTML threat report emailed automatically (`REPORT_SCHEDULE=daily|weekly`)
+- **SIEM / syslog forwarding** — fire-and-forget UDP syslog in JSON or CEF format to any log aggregator (`SYSLOG_HOST`, `SYSLOG_FORMAT=json|cef`)
+- **Data retention** — automatic hourly purge of requests older than `MAX_REQUEST_AGE_DAYS` days (0 = keep forever)
+- **Fail2ban / iptables export** — blocked IPs written to `BLOCKLIST_FILE` in plain or fail2ban format on every block/unblock
 - **IP blocking** — manual block from dashboard/modal/drawer, or auto-block IPs that repeatedly trigger CRITICAL alerts
 - **IP allow-list** — whitelist your own IPs so they never appear in the feed or trigger auto-block
 - **IP notes / tagging** — annotate any attacker IP with a freeform note; appears in the session drawer and live feed (📝 tooltip)
 - **CSV export** — one-click download of all (or filtered) requests as CSV; supports `?risk=`, `?category=`, `?ip=`, `?since=` filters
+- **Top Attackers leaderboard** — Top 10 IPs and Top 10 countries ranked by request count, updated on every stats refresh
+- **Keyboard navigation** — `j`/`k` navigate feed rows, `Enter` opens request modal, `b` blocks the selected IP, `Escape` closes modals
 - **Per-service toggle** — enable or disable any platform from the dashboard; changes take effect instantly and persist across restarts
 - **Tarpit mode** — per-service delay (default 30 s) that wastes attacker time before responding
 - **Canary tokens** — fake API key embedded in `/v1/models`; any attacker who reuses it is instantly flagged CRITICAL
@@ -64,7 +84,7 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **IP geolocation** — country, city and coordinates via ip-api.com (2-layer cache)
 - **Live dashboard** — world map with risk-coloured pins, request feed, charts, timeline
 - **Attack intelligence charts** — 7-day trend chart and hour-of-day heatmap showing when attacks peak
-- **Real-time WebSocket push** — authenticated WebSocket (`?token=sha256(ADMIN_PASSWORD)`) delivers live updates to the dashboard without polling
+- **Real-time WebSocket push** — authenticated WebSocket (`?token=sha256(ADMIN_PASSWORD)`) delivers live updates without polling
 - **Request body viewer** — click any feed row to inspect headers, prettified JSON body, and flagged patterns; copy as cURL in one click
 - **Request search** — full-text search across IP, path, body, and country in the feed
 - **Per-IP session view** — click any IP to open a slide-out drawer with its complete request timeline
@@ -153,6 +173,8 @@ python main.py
 
 All settings are configurable via environment variables (ideal for Docker) or by editing `config.py`.
 
+### Core
+
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `11434` | Listen port — matches real Ollama for honeypot effect |
@@ -160,24 +182,71 @@ All settings are configurable via environment variables (ideal for Docker) or by
 | `ADMIN_PASSWORD` | `changeme` | **Change this before deploying** |
 | `ADMIN_PREFIX` | `/__admin` | Dashboard URL prefix |
 | `DB_PATH` | `honeypot.db` | SQLite path (`/data/honeypot.db` in Docker) |
+| `MAX_REQUESTS_STORED` | `100000` | SQLite row cap (oldest rows pruned) |
+| `MAX_REQUEST_AGE_DAYS` | `0` | Auto-purge requests older than N days (0 = disabled) |
+| `STREAM_WORD_DELAY_SECS` | `0.04` | Per-word delay in fake streaming (~25 tok/s) |
+
+### Detection thresholds
+
+| Variable | Default | Description |
+|---|---|---|
 | `RAPID_REQUEST_THRESHOLD` | `20` | Requests/60 s from one IP → CRITICAL |
 | `REPEAT_IP_THRESHOLD` | `5` | Requests/10 min from one IP → MEDIUM |
 | `LARGE_BODY_THRESHOLD` | `5000` | Body bytes above this → MEDIUM |
-| `STREAM_WORD_DELAY_SECS` | `0.04` | Per-word delay in fake streaming (~25 tok/s) |
-| `MAX_REQUESTS_STORED` | `100000` | SQLite row cap (oldest rows pruned) |
+
+### Geolocation
+
+| Variable | Default | Description |
+|---|---|---|
 | `GEO_CACHE_TTL_HOURS` | `24` | IP geolocation cache lifetime |
-| `TARPIT_DELAY_SECS` | `30.0` | Seconds to delay response when tarpit is enabled for a service |
+
+### Blocking & tarpit
+
+| Variable | Default | Description |
+|---|---|---|
+| `TARPIT_DELAY_SECS` | `30.0` | Seconds to delay response when tarpit is enabled |
+| `AUTO_BLOCK_ENABLED` | `false` | Automatically block IPs that repeatedly trigger CRITICAL alerts |
+| `AUTO_BLOCK_THRESHOLD` | `3` | Number of CRITICAL hits within the window to trigger auto-block |
+| `AUTO_BLOCK_WINDOW` | `300` | Time window in seconds for the auto-block threshold |
+| `BLOCKLIST_FILE` | _(empty)_ | Path to write blocked IPs for fail2ban / iptables (plain or fail2ban format) |
+| `BLOCKLIST_FORMAT` | `plain` | `plain` (one IP per line) or `fail2ban` |
+
+### Alerting
+
+| Variable | Default | Description |
+|---|---|---|
 | `WEBHOOK_URLS` | _(empty)_ | Comma-separated list of webhook URLs to POST alerts to |
 | `WEBHOOK_RISK_LEVELS` | `CRITICAL,HIGH` | Which risk levels trigger webhook notifications |
 | `WEBHOOK_FORMAT` | `json` | Webhook payload format: `slack`, `discord`, or `json` |
 | `WEBHOOK_TIMEOUT_SECS` | `5.0` | Timeout for webhook HTTP requests |
+| `SMTP_HOST` | _(empty)_ | SMTP server hostname — enables email alerts when set |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | _(empty)_ | SMTP username |
+| `SMTP_PASS` | _(empty)_ | SMTP password |
+| `SMTP_FROM` | `honeypot@localhost` | From address for alert emails |
+| `SMTP_TO` | _(empty)_ | Recipient address for alert emails |
+| `SMTP_TLS` | `true` | Use STARTTLS (`true`) or SSL (`false`) |
+| `EMAIL_RISK_LEVELS` | `CRITICAL` | Which risk levels trigger email alerts |
+| `REPORT_SCHEDULE` | _(empty)_ | `daily` or `weekly` — enables scheduled HTML threat reports |
+| `REPORT_EMAIL_TO` | _(empty)_ | Recipient for scheduled reports (defaults to `SMTP_TO`) |
+
+### SIEM / syslog
+
+| Variable | Default | Description |
+|---|---|---|
+| `SYSLOG_HOST` | _(empty)_ | Syslog receiver hostname — enables forwarding when set |
+| `SYSLOG_PORT` | `514` | UDP port |
+| `SYSLOG_FORMAT` | `json` | Payload format: `json` or `cef` (Common Event Format) |
+
+### Integrations
+
+| Variable | Default | Description |
+|---|---|---|
 | `ABUSEIPDB_API_KEY` | _(empty)_ | [AbuseIPDB](https://www.abuseipdb.com/register) API key — enables reputation checks |
 | `ABUSEIPDB_MAX_AGE_DAYS` | `90` | Max report age used in AbuseIPDB queries |
 | `METRICS_ENABLED` | `false` | Set to `true` to expose `/metrics` in Prometheus text format |
 | `METRICS_TOKEN` | _(empty)_ | Optional Bearer token to protect the `/metrics` endpoint |
-| `AUTO_BLOCK_ENABLED` | `false` | Automatically block IPs that repeatedly trigger CRITICAL alerts |
-| `AUTO_BLOCK_THRESHOLD` | `3` | Number of CRITICAL hits within the window to trigger auto-block |
-| `AUTO_BLOCK_WINDOW` | `300` | Time window in seconds for the auto-block threshold |
+| `DECEPTION_ENABLED` | `true` | Generate deception token URL shown in Intelligence panel |
 
 > **WebSocket auth token** is derived automatically as `sha256(ADMIN_PASSWORD)` — no separate variable needed. Change `ADMIN_PASSWORD` and the token rotates with it.
 
@@ -187,10 +256,10 @@ All settings are configurable via environment variables (ideal for Docker) or by
 
 | Level | Colour | Triggers |
 |---|---|---|
-| **CRITICAL** | 🔴 | Jailbreak / prompt injection, code execution (`exec`, `os.system`, `subprocess`), path traversal, SQL injection, mass scanning (>20 req/60 s), **canary token reuse**, AWS/GCP/Azure credential exposure, SSRF attempts, template injection (`{{...}}`, `${...}`), NoSQL injection (`$where`, `$eval`), base64-encoded payloads |
-| **HIGH** | 🟠 | Model management (`/api/pull`, `/api/push`, `/api/delete`), scanner user-agents (nikto, sqlmap, nmap, censys…), sensitive path segments (admin, secret, .env…), GraphQL introspection, credential stuffing |
-| **MEDIUM** | 🟡 | Embeddings & reranking, image generation, audio transcription, repeated IPs (>5/10 min), unknown model names, large bodies (>5 KB) |
-| **LOW** | 🟢 | Normal inference, chat, model listing, enumeration |
+| **CRITICAL** | 🔴 | Jailbreak / prompt injection, code execution (`exec`, `os.system`, `subprocess`), path traversal, SQL injection, mass scanning (>20 req/60 s), **canary token reuse**, **deception callback**, **custom CRITICAL rule match**, AWS/GCP/Azure credential exposure, SSRF attempts, template injection (`{{...}}`, `${...}`), NoSQL injection (`$where`, `$eval`), base64-encoded payloads |
+| **HIGH** | 🟠 | Model management (`/api/pull`, `/api/push`, `/api/delete`), scanner user-agents (nikto, sqlmap, nmap, censys…), sensitive path segments (admin, secret, .env…), GraphQL introspection, credential stuffing, **custom HIGH rule match** |
+| **MEDIUM** | 🟡 | Embeddings & reranking, image generation, audio transcription, repeated IPs (>5/10 min), unknown model names, large bodies (>5 KB), **custom MEDIUM rule match** |
+| **LOW** | 🟢 | Normal inference, chat, model listing, enumeration, **custom LOW rule match** |
 
 ---
 
@@ -233,6 +302,86 @@ Every simulated platform has two independent controls in the **Simulated Platfor
 ---
 
 ## Intelligence Features
+
+### Custom Detection Rules
+Define your own regex patterns from the **🔎 Custom Detection Rules** panel:
+- Enter a name, regex pattern, and risk level (CRITICAL / HIGH / MEDIUM / LOW)
+- Rules are compiled and hot-reloaded instantly — no restart required
+- Enable or disable individual rules without deleting them
+- Matched rules add a `custom:<flag_name>` tag to the request's flagged patterns
+- Patterns are tested against the full request body + headers text
+
+### Threat Feed Integration
+The honeypot downloads the [Feodo Tracker](https://feodotracker.abuse.ch/) recommended C2 IP blocklist at startup and refreshes it every 24 hours (no API key required):
+- IPs matching known C2 infrastructure get a red **C2** badge in the live feed
+- Feed statistics (IP count, last refresh time) are shown in the Intelligence panel
+- The lookup is synchronous and in-memory — zero overhead on the hot path
+
+### Deception Tokens
+A unique session-scoped tracking URL is generated at startup and displayed in the **Intelligence** panel:
+- Copy the URL and embed it anywhere in your fake model responses (e.g. as a "documentation link")
+- Any attacker who follows the URL triggers a CRITICAL `deception_callback` alert
+- The `/track/{token}` endpoint returns a silent 1×1 transparent GIF so the request completes normally
+- All callbacks are logged to a dedicated `deception_callbacks` SQLite table
+
+### Email Alerts
+Set `SMTP_HOST` and `SMTP_TO` to receive HTML email alerts for high-severity events:
+
+```bash
+docker run ... \
+  -e SMTP_HOST=smtp.gmail.com \
+  -e SMTP_PORT=587 \
+  -e SMTP_USER=you@gmail.com \
+  -e SMTP_PASS=app-password \
+  -e SMTP_TO=alerts@example.com \
+  -e EMAIL_RISK_LEVELS=CRITICAL \
+  ...
+```
+
+Uses Python's stdlib `smtplib` — no extra dependencies. Runs in an executor so alerts never block request handling.
+
+### Scheduled Threat Reports
+Set `REPORT_SCHEDULE=daily` or `REPORT_SCHEDULE=weekly` to receive automated HTML threat reports by email:
+- Sent at the first scheduled hour after midnight (daily) or on Monday (weekly)
+- Contains the same content as the **⬇ Threat Report** HTML download: top IPs, paths, patterns, geo breakdown
+- Requires `SMTP_HOST` and either `REPORT_EMAIL_TO` or `SMTP_TO`
+
+### SIEM / Syslog Forwarding
+Set `SYSLOG_HOST` to forward every captured event to your log aggregator via UDP:
+
+```bash
+# JSON format (default)
+docker run ... -e SYSLOG_HOST=192.168.1.100 -e SYSLOG_PORT=514 ...
+
+# CEF (Common Event Format) — for Splunk, IBM QRadar, etc.
+docker run ... -e SYSLOG_HOST=192.168.1.100 -e SYSLOG_FORMAT=cef ...
+```
+
+### Data Retention
+Set `MAX_REQUEST_AGE_DAYS` to automatically purge old requests:
+- An hourly background task deletes rows older than the configured limit
+- Set to `0` (default) to keep all data indefinitely
+- Works alongside `MAX_REQUESTS_STORED` (hard cap on total row count)
+
+### Fail2ban / iptables Integration
+Set `BLOCKLIST_FILE` to write blocked IPs to a file on every block/unblock event:
+
+```bash
+# Plain format — one IP per line
+docker run ... -e BLOCKLIST_FILE=/data/blocked.txt ...
+
+# fail2ban format — with timestamps and reason comments
+docker run ... -e BLOCKLIST_FILE=/data/blocked.txt -e BLOCKLIST_FORMAT=fail2ban ...
+```
+
+Mount the file into your host and configure fail2ban to read it, or use it directly with `iptables`.
+
+### Top Attackers Leaderboard
+The **🏆 Top Attackers** section below the intelligence charts shows:
+- **Top IPs** — the 10 most active attacker IPs with country, request count, and max risk level; click any IP to open its session drawer
+- **Top Countries** — the 10 most active source countries with request counts and percentage of total traffic
+
+Updated automatically with every stats refresh (every 30 seconds).
 
 ### Canary Tokens
 A unique fake API key (`sk-pot-…`) is generated at startup and embedded in the `/v1/models` response. If an attacker copies this key and submits it in a subsequent request, the classifier immediately flags it as **CRITICAL** with the `canary_token_reuse` pattern.
@@ -307,6 +456,17 @@ Export request data for offline analysis (Excel, Splunk, pandas, SIEM):
 - Columns: `id`, `timestamp`, `ip`, `method`, `path`, `category`, `risk_level`, `country`, `city`, `user_agent`, `flagged_patterns`, `body_snippet` (first 200 chars)
 - Streamed in batches — safe to export large datasets without memory spikes
 
+### Keyboard Navigation
+Navigate the live feed without touching the mouse:
+
+| Key | Action |
+|---|---|
+| `j` / `↓` | Select next row in feed |
+| `k` / `↑` | Select previous row in feed |
+| `Enter` | Open request modal for selected row |
+| `b` | Block IP of selected row |
+| `Escape` | Close modal or drawer |
+
 ### WebSocket Security
 The real-time `/ws` endpoint is token-authenticated:
 - A `sha256(ADMIN_PASSWORD)` token is injected into the dashboard page at load time
@@ -315,7 +475,7 @@ The real-time `/ws` endpoint is token-authenticated:
 - Rotating `ADMIN_PASSWORD` instantly invalidates any existing unauthorised connections
 
 ### Attack Intelligence Charts
-Two new charts below the standard risk/category/timeline charts:
+Two charts below the standard risk/category/timeline charts:
 - **7-Day Trend** — stacked bar chart showing CRITICAL / HIGH / MEDIUM / LOW request counts per day for the last week
 - **Hour-of-Day Heatmap** — 7×24 colour grid revealing which days and hours attackers are most active (darker = more requests). Refreshes every 5 minutes.
 
@@ -379,32 +539,43 @@ Attacker
 │    7. asyncio.create_task(log_request) ← never blocks      │
 └───────────┬────────────────────────────────────────────────┘
             │
-   ┌────────▼──────────┐
-   │  Logger pipeline   │
-   │  ├─ Classifier     │  sync regex + canary → (category, risk, flags)
-   │  ├─ Geolocator     │  async, 2-layer cache (memory + SQLite)
-   │  ├─ AbuseIPDB      │  optional reputation check (cached)
-   │  ├─ IP notes       │  attach operator note to broadcast if set
-   │  ├─ Auto-block     │  CRITICAL threshold check → block + broadcast
-   │  ├─ SQLite write   │  aiosqlite, single write lock
-   │  ├─ WS broadcast   │  fan-out to authenticated dashboard clients
-   │  └─ Webhooks       │  async POST to Slack/Discord/JSON endpoints
-   └────────┬───────────┘
+   ┌────────▼──────────────┐
+   │  Logger pipeline       │
+   │  ├─ Classifier         │  sync regex + canary + custom rules
+   │  ├─ Geolocator         │  async, 2-layer cache (memory + SQLite)
+   │  ├─ AbuseIPDB          │  optional reputation check (cached)
+   │  ├─ Threat feed        │  sync C2 IP lookup (Feodo Tracker)
+   │  ├─ IP notes           │  attach operator note to broadcast
+   │  ├─ Auto-block         │  CRITICAL threshold check → block + broadcast
+   │  ├─ SQLite write       │  aiosqlite, single write lock
+   │  ├─ WS broadcast       │  fan-out to authenticated dashboard clients
+   │  ├─ Webhooks           │  async POST to Slack/Discord/JSON
+   │  ├─ Email alerts       │  SMTP in executor (non-blocking)
+   │  ├─ Syslog             │  UDP JSON/CEF fire-and-forget
+   │  └─ Deception log      │  /track/ callbacks → deception_callbacks table
+   └────────┬───────────────┘
             │ WebSocket (token-authenticated)
-   ┌────────▼────────────────────────────────────┐
-   │  Dashboard  /__admin  (HTTP Basic Auth)      │
-   │  ├─ World map         Leaflet + CartoDB      │
-   │  ├─ Request feed      live + search + CSV ⬇  │
-   │  ├─ Request modal     body/headers/cURL      │
-   │  ├─ IP session view   drawer + note editor   │
-   │  ├─ Charts            risk/cat/24h/7d        │
-   │  ├─ Heatmap           hour-of-day grid       │
-   │  ├─ Service panel     enable + tarpit        │
-   │  ├─ Blocked IPs       manual + auto-block    │
-   │  ├─ Allowed IPs       whitelist panel        │
-   │  ├─ Intelligence      webhooks + canary      │
-   │  └─ Threat report     HTML download          │
-   └─────────────────────────────────────────────┘
+   ┌────────▼────────────────────────────────────────┐
+   │  Dashboard  /__admin  (HTTP Basic Auth)          │
+   │  ├─ World map           Leaflet + CartoDB        │
+   │  ├─ Request feed        live + search + CSV ⬇   │
+   │  ├─ Request modal       body/headers/cURL        │
+   │  ├─ IP session view     drawer + note editor     │
+   │  ├─ Charts              risk/cat/24h/7d/heatmap  │
+   │  ├─ Service panel       enable + tarpit          │
+   │  ├─ Intelligence        webhooks/canary/deception│
+   │  ├─ Threat feed stats   C2 count + last refresh  │
+   │  ├─ Top Attackers       IPs + countries leaderboard│
+   │  ├─ Blocked IPs         manual + auto-block      │
+   │  ├─ Allowed IPs         whitelist panel          │
+   │  ├─ Custom Rules        regex CRUD + hot-reload  │
+   │  └─ Threat report       HTML download            │
+   └─────────────────────────────────────────────────┘
+
+Background tasks (asyncio):
+   ├─ Feodo Tracker feed refresh  (every 24 h)
+   ├─ Data retention purge        (every 1 h)
+   └─ Scheduled threat report     (daily / weekly)
 ```
 
 ---
