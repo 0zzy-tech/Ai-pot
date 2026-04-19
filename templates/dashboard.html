@@ -351,11 +351,17 @@
 
   <!-- ── Footer ─────────────────────────────────────────────────────── -->
   <!-- ── About ─────────────────────────────────────────────────────────── -->
-  <div style="border-top:1px solid var(--border); background:var(--surface); padding:24px 28px;">
-    <div style="max-width:860px;">
-      <div style="font-size:13px; font-weight:700; color:var(--text); margin-bottom:10px; letter-spacing:0.3px;">
-        ABOUT
-      </div>
+  <div style="border-top:1px solid var(--border); background:var(--surface);">
+    <div style="padding:14px 28px; cursor:pointer; display:flex; align-items:center; gap:8px; user-select:none;"
+         onclick="toggleAbout()">
+      <span style="font-size:13px; font-weight:700; color:var(--text); letter-spacing:0.3px;">ABOUT</span>
+      <svg id="about-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+           style="color:var(--text-muted); transition:transform 0.2s; margin-left:2px;">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </div>
+    <div id="about-body" style="display:none; padding:0 28px 20px; max-width:860px;">
       <p style="font-size:13px; color:var(--text-muted); line-height:1.7; margin:0 0 10px;">
         AI Honeypot is a lightweight deception platform that simultaneously masquerades as
         <strong style="color:var(--text)">13 AI API servers</strong> — Ollama, OpenAI, Anthropic, HuggingFace, Stable Diffusion, and more —
