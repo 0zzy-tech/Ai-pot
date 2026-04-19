@@ -463,6 +463,15 @@ async def api_deception_token(_: str = Depends(_check_auth)):
     return JSONResponse(content={"token": token})
 
 
+# ── ML Intelligence stats ─────────────────────────────────────────────────────
+
+@router.get("/api/ml/stats")
+async def api_ml_stats(_: str = Depends(_check_auth)):
+    """ML engine status — model availability, training progress, cluster summary."""
+    from app.ml_engine import engine as ml
+    return JSONResponse(content=ml.stats())
+
+
 # ── Threat feed stats ─────────────────────────────────────────────────────────
 
 @router.get("/api/threat-feeds")

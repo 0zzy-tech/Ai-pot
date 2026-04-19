@@ -85,6 +85,11 @@ async def lifespan(app: FastAPI):
     if updated:
         logger.info("Backfilled is_c2=1 on %d existing request rows", updated)
 
+    # Load ML engine (cold-start safe — waits for 100+ samples before training)
+    from app.ml_engine import engine as ml
+    ml.load()
+    asyncio.create_task(ml.training_loop())
+
     # Start background refresh loops
     from app.scheduler import start_background_tasks
     asyncio.create_task(threat_feed_task())

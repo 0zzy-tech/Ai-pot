@@ -75,9 +75,13 @@
       ? ` <span title="${esc(d.note)}" style="font-size:10px;cursor:pointer">📝</span>` : '';
     const c2Badge = d.is_c2
       ? ` <span title="Known C2 IP (Feodo Tracker)" style="font-size:10px;color:var(--risk-critical);font-weight:700">C2</span>` : '';
+    const anomalyBadge = d.ml_anomaly_score != null && d.ml_anomaly_score >= 0.75
+      ? ` <span title="ML Anomaly Score: ${d.ml_anomaly_score.toFixed(2)}" style="font-size:10px;color:#d2a0ff;font-weight:700">ANOMALY</span>` : '';
+    const botBadge = d.ml_bot_probability != null && d.ml_bot_probability >= 0.8
+      ? ` <span title="ML Bot Probability: ${(d.ml_bot_probability * 100).toFixed(0)}%" style="font-size:10px;color:#79c0ff;font-weight:700">BOT</span>` : '';
     return `
       <td>${fmtTime(d.timestamp)}</td>
-      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${c2Badge}${noteIndicator}</td>
+      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${c2Badge}${anomalyBadge}${botBadge}${noteIndicator}</td>
       <td title="${esc(d.path)}">${esc(d.path)}</td>
       <td>${riskBadge(d.risk_level)}</td>
       <td>${catChip(d.category)}</td>
@@ -746,6 +750,92 @@
       .catch(() => {});
   }
 
+  // ── ML Intelligence stats ─────────────────────────────────────────────────────
+
+  function loadMlStats() {
+    fetch(`${ADMIN_PREFIX}/api/ml/stats`)
+      .then(r => r.json())
+      .then(data => {
+        // Model status card
+        const statusEl = document.getElementById('ml-status-body');
+        if (statusEl) {
+          if (data.trained) {
+            statusEl.innerHTML =
+              `<span style="color:var(--risk-low)">✓ Models trained</span><br>` +
+              `<span style="font-size:11px;color:var(--text-muted)">` +
+              `Samples: <strong>${(data.total_samples||0).toLocaleString()}</strong> &bull; ` +
+              `Last train: ${data.last_trained ? data.last_trained.slice(0,19).replace('T',' ') + ' UTC' : '—'}` +
+              `</span>`;
+          } else {
+            statusEl.innerHTML =
+              `<span style="color:var(--text-muted)">⏳ Warming up</span><br>` +
+              `<span style="font-size:11px;color:var(--text-muted)">` +
+              `Waiting for ${data.min_samples_needed||100}+ samples ` +
+              `(${(data.total_samples||0)} so far)` +
+              `</span>`;
+          }
+        }
+
+        // Anomaly card
+        const anomalyEl = document.getElementById('ml-anomaly-body');
+        if (anomalyEl) {
+          if (data.trained) {
+            anomalyEl.innerHTML =
+              `<strong style="color:#d2a0ff;font-size:18px">${(data.anomalies_24h||0).toLocaleString()}</strong>` +
+              `<span style="font-size:11px;color:var(--text-muted)"> anomalies in last 24h</span><br>` +
+              `<span style="font-size:11px;color:var(--text-muted)">Threshold: score ≥ 0.75 · Model: Isolation Forest</span>`;
+          } else {
+            anomalyEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Not yet trained</span>`;
+          }
+        }
+
+        // Bot card
+        const botEl = document.getElementById('ml-bot-body');
+        if (botEl) {
+          if (data.trained) {
+            botEl.innerHTML =
+              `<strong style="color:#79c0ff;font-size:18px">${(data.bots_detected||0).toLocaleString()}</strong>` +
+              `<span style="font-size:11px;color:var(--text-muted)"> high-confidence bots (≥80%)</span><br>` +
+              `<span style="font-size:11px;color:var(--text-muted)">Model: Random Forest · per-session timing + diversity features</span>`;
+          } else {
+            botEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Not yet trained</span>`;
+          }
+        }
+
+        // Clusters card
+        const clustersEl = document.getElementById('ml-clusters-body');
+        if (clustersEl) {
+          if (data.trained && data.cluster_summary) {
+            const clusters = data.cluster_summary.filter(c => c.cluster_id !== -1);
+            if (clusters.length) {
+              let html = `<strong style="color:var(--risk-medium);font-size:18px">${clusters.length}</strong>` +
+                `<span style="font-size:11px;color:var(--text-muted)"> active attack cluster${clusters.length !== 1 ? 's' : ''}</span><br>`;
+              html += `<div style="margin-top:6px;font-size:11px">` +
+                clusters.slice(0, 5).map(c =>
+                  `<div>Cluster ${c.cluster_id}: <strong>${c.ip_count}</strong> IPs &bull; ` +
+                  `<span class="badge badge-${esc(c.max_risk)}">${esc(c.max_risk)}</span></div>`
+                ).join('') + `</div>`;
+              if (clusters.length > 5) html += `<div style="font-size:11px;color:var(--text-muted)">+${clusters.length - 5} more</div>`;
+              clustersEl.innerHTML = html;
+            } else {
+              clustersEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">No clusters found (all IPs unique)</span>`;
+            }
+          } else {
+            clustersEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Not yet trained</span>`;
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  function toggleMlSection() {
+    const body = document.getElementById('ml-body');
+    if (!body) return;
+    const open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    if (open) loadMlStats();
+  }
+
   // ── Custom detection rules ─────────────────────────────────────────────────────
 
   function loadCustomRules() {
@@ -1028,6 +1118,7 @@
     loadCustomRules();
     loadDeceptionToken();
     loadThreatFeedStats();
+    loadMlStats();
     loadIntelCharts();
 
     // Update auto-block status indicator
@@ -1136,6 +1227,7 @@
   window.saveIpNote           = saveIpNote;
   window.cancelIpNote         = cancelIpNote;
   window.copyDeceptionToken   = copyDeceptionToken;
+  window.toggleMlSection      = toggleMlSection;
   window.addCustomRule        = addCustomRule;
   window.toggleCustomRule     = toggleCustomRule;
   window.deleteCustomRule     = deleteCustomRule;

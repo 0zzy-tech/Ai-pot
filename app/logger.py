@@ -138,6 +138,24 @@ async def log_request(
         from app.threatfox import get_threatfox_hit
         threatfox_hit = get_threatfox_hit(ip)
 
+        # ML scoring (cold-start safe — returns empty dict until models are trained)
+        from app.ml_engine import engine as _ml
+        ml_request_scores = _ml.score_request({
+            "body_len":      len(body_text),
+            "path":          path,
+            "method":        method,
+            "headers":       headers,
+            "flagged_count": len(flagged),
+            "recent_60s":    recent_60s,
+            "recent_600s":   recent_600s,
+            "is_c2":         c2_hit,
+            "is_tor":        bool(rep.get("is_tor")) if rep else False,
+            "abuse_score":   rep.get("abuse_score", 0) if rep else 0,
+            "is_hosting":    bool(geo.get("hosting")) if geo else False,
+            "category":      category,
+        })
+        ml_session_scores = await _ml.score_session_async(ip)
+
         record = {
             "timestamp":        datetime.now(timezone.utc).isoformat(),
             "ip":               ip,
@@ -228,6 +246,10 @@ async def log_request(
             "greynoise_noise":          gn["greynoise_noise"]          if gn else None,
             "greynoise_riot":           gn["greynoise_riot"]           if gn else None,
             "greynoise_name":           gn["greynoise_name"]           if gn else None,
+            "ml_anomaly_score":         ml_request_scores.get("anomaly_score"),
+            "ml_risk_score":            ml_request_scores.get("risk_score"),
+            "ml_bot_probability":       ml_session_scores.get("bot_probability"),
+            "ml_cluster_id":            ml_session_scores.get("cluster_id"),
         }
         await manager.broadcast({"type": "new_request", "data": broadcast_data})
 
