@@ -467,7 +467,7 @@ footer span { display: flex; align-items: center; gap: 6px; }
 /* ── Attack Intelligence Charts ──────────────────────────────────────── */
 #intel-charts-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
 #intel-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
-.intel-chart-panel { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+.intel-chart-panel { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; position: relative; height: 220px; }
 .intel-chart-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 10px; }
 
 /* ── Heatmap ─────────────────────────────────────────────────────────── */
