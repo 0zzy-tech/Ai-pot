@@ -18,8 +18,8 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
 │   🌍 World Map               ├──────────────────────────────────────┤
 │   (risk-coloured pins)       │ Time     IP*              Risk Ctry  │
-│                              │ 14:32:01 185.220.x.x●C2TF ANOMALY BOT CRIT RU│
-│                              │ 14:31:58 103.21.x.x  TOR    HIGH CN │
+│                              │ 14:32:01 185.220.x.x●C2TF ANOMALY BOT ML:CRITICAL RU│
+│                              │ 14:31:58 103.21.x.x  TOR GEORISK ML:HIGH  CN │
 │                              │  * click IP → session drawer        │
 │                              │  * click row → modal  j/k/Enter/b  │
 ├──────────┬───────────────────┴──────────────────────────────────────┤
@@ -61,14 +61,17 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 ├─────────────────────────────────────────────────────────────────────┤
 │  🤖 ML Intelligence  (collapsible)                                   │
 │  Model Status:  ✓ Trained · 2,341 samples · last: 2026-04-19 14:00 │
+│    Composite baseline: p10=0.08 · p50=0.21 · p90=0.54              │
 │  Anomaly Detection:  12 anomalies in last 24h  (Isolation Forest)   │
 │  Bot Detection:      8 high-confidence bots ≥80%  (Random Forest)  │
 │  Attack Clusters:    3 active clusters  (DBSCAN)                    │
 │    Cluster 0: 12 IPs · CRITICAL   Cluster 1: 7 IPs · HIGH          │
+│  🌍 Geo Risk: CN 89% · RU 76% · IR 71% · KP 68% · BR 55%          │
+│    Top ASNs: AS4134 91% · AS1234 78%                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │  ABOUT ▾  (collapsible — built by Ozzytech · Martyn Oswald)         │
 └─────────────────────────────────────────────────────────────────────┘
-● = high AbuseIPDB score · C2 = Feodo botnet · TF = ThreatFox IOC · 📝 = note · ANOMALY/BOT = ML flags
+● = high AbuseIPDB score · C2 = Feodo botnet · TF = ThreatFox IOC · 📝 = note · ANOMALY/BOT/GEORISK/ML:BAND = ML flags
 ```
 
 ---
@@ -111,7 +114,7 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 - **Per-IP session view** — click any IP to open a slide-out drawer with its complete request timeline
 - **Threat report** — one-click self-contained HTML download with top IPs, paths, patterns, and geo breakdown
 - **Prometheus metrics** — optional `/metrics` endpoint for Grafana / alertmanager integration
-- **TinyML on-device intelligence** — 4 scikit-learn models run entirely in-process; no cloud, no GPU; Raspberry Pi compatible (~120 MB RAM overhead)
+- **TinyML on-device intelligence** — 5 on-device models (Isolation Forest, DBSCAN, 2× Random Forest, GeoRisk) run entirely in-process; ip_cache enrichment features, timing regularity, Bayesian geo risk, and composite threat scoring; no cloud, no GPU; Raspberry Pi compatible (~120 MB RAM overhead)
 - **Multi-arch Docker image** — `linux/amd64`, `linux/arm64`, `linux/arm/v7`
 - **Lightweight** — single async worker, SQLite only, <512 MB RAM on Raspberry Pi 4
 
@@ -426,7 +429,7 @@ Set `GREYNOISE_API_KEY` to classify every attacker IP via the [GreyNoise](https:
 Results are cached in `ip_cache` and shown in the session drawer. Free community tier covers 1,000 checks/day.
 
 ### TinyML On-Device Intelligence
-Four scikit-learn models run entirely in-process — no cloud API, no GPU, no separate service. All inference happens in microseconds per request. Designed to run alongside the honeypot on a Raspberry Pi 4.
+Five on-device models run entirely in-process — no cloud API, no GPU, no separate service. All inference happens in microseconds per request. Designed to run alongside the honeypot on a Raspberry Pi 4.
 
 #### Models
 
@@ -436,35 +439,63 @@ Four scikit-learn models run entirely in-process — no cloud API, no GPU, no se
 | **Attack Clustering** | DBSCAN | Groups attacker IPs by behavioural fingerprint — spot coordinated campaigns where multiple IPs run the same scanner |
 | **Risk Enhancement** | Random Forest | Continuous 0–1 probability trained on your historical `risk_level` labels — catches misclassified requests |
 | **Bot Detection** | Random Forest | Scores sessions as automated vs human based on timing regularity, path diversity, and user-agent consistency |
+| **Geo Risk** | Bayesian dict | Country and ASN risk scores derived from historical high/critical ratios — catches new IPs from known-bad origins before they accumulate session history |
+
+#### Feature vectors
+Features are enriched with ip_cache reputation data at training and inference time:
+
+**Per-request (15 features):** body length, path length, path depth, header count, hour of day, POST flag, JSON body flag, auth header flag, flagged pattern count, category, C2 flag, AbuseIPDB score, Tor flag, hosting flag, ThreatFox hit
+
+**Per-session (15 features):** total requests, unique paths, unique user-agents, avg inter-request time, session span, high/critical risk ratio, unique categories, path diversity ratio, avg body size, AbuseIPDB score, Tor flag, hosting flag, ThreatFox hit, **timing std dev** (inter-request gap standard deviation — the canonical bot-detection signal; low variance + high request count = scanner)
+
+#### Composite threat score
+Every request receives a `ml_composite_score` (0–1) combining all sub-models:
+
+| Signal | Weight |
+|---|---|
+| Anomaly score (Isolation Forest) | 25% |
+| Risk probability (Random Forest) | 35% |
+| Geo risk (Bayesian country/ASN) | 20% |
+
+Mapped to `ml_threat_band`: **LOW** / **MEDIUM** / **HIGH** / **CRITICAL**. The ML Intelligence status card shows the training-data `p10 / p50 / p90` percentile calibration so you can judge whether thresholds are appropriate for your traffic.
 
 #### Dashboard
-The collapsible **🤖 ML Intelligence** panel shows:
-- **Model status** — trained / warming up / sample count / last training time
-- **Anomaly count** — requests flagged anomalous in the last 24 h
-- **Bot detection count** — high-confidence bot sessions (≥ 80%)
-- **Attack clusters** — number of active clusters with IP counts and max risk
+The collapsible **🤖 ML Intelligence** panel shows five cards:
+- **Model status** — trained / warming up / sample count / last training time / composite percentile calibration
+- **Anomaly detection** — real count of requests flagged anomalous in the last 24 h (computed from training data, not a placeholder)
+- **Bot detection** — real count of high-confidence bot sessions (≥ 80%) detected at last training
+- **Attack clusters** — active DBSCAN cluster count with per-cluster IP counts
+- **🌍 Geo Risk Intelligence** — top-5 riskiest countries and ASNs ranked by Bayesian risk score
 
 #### Feed badges
-- **ANOMALY** (purple) — request anomaly score ≥ 0.75
-- **BOT** (blue) — session bot probability ≥ 80%
+
+| Badge | Colour | Condition |
+|---|---|---|
+| **ANOMALY** | purple | request anomaly score ≥ 0.75 |
+| **BOT** | blue | session bot probability ≥ 80% |
+| **GEORISK** | amber | geo risk score ≥ 0.70 (shown only when ANOMALY badge is absent) |
+| **ML:HIGH** | orange | composite threat score ≥ 0.50 |
+| **ML:CRITICAL** | red | composite threat score ≥ 0.75 |
 
 #### Training schedule
 - **Cold start**: models are `None` — all scores return `None` gracefully, no errors
 - **First train**: triggered automatically when 100+ requests exist in the database
 - **Retrain**: every 200 new requests or every 60 minutes, whichever comes first
 - **Runs in**: a thread executor — never blocks the async event loop
+- **Model version guard**: if serialised models have the wrong feature dimension (e.g. from a pre-Phase-2 install), they are discarded and retrained automatically
 
 #### Raspberry Pi sizing
 | Component | RAM | CPU time (Pi 4) |
 |---|---|---|
 | scikit-learn import | ~80 MB | 2 s startup |
-| All 4 models loaded | ~40 MB | — |
+| All 5 models loaded | ~40 MB | — |
+| GeoRisk dicts (Phase 2) | < 1 MB | — |
 | Per-request inference | negligible | < 1 ms |
 | Training (1,000 samples) | ~50 MB peak | ~5 s |
 
-Models are saved to `/data/ml_models/` via joblib and reloaded on restart. Total overhead: ~120 MB RAM, ~2 s extra startup.
+Models are saved to `/data/ml_models/` via joblib and reloaded on restart. Total overhead: ~121 MB RAM, ~2 s extra startup.
 
-API: `GET /__admin/api/ml/stats` — returns model status, training counts, and cluster summary.
+API: `GET /__admin/api/ml/stats` — returns model status, real training counters, cluster summary, top risky countries/ASNs, and composite percentile calibration.
 
 ### Top Attackers Leaderboard
 The **🏆 Top Attackers** section below the intelligence charts shows:
