@@ -18,8 +18,8 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
 │   🌍 World Map               ├──────────────────────────────────────┤
 │   (risk-coloured pins)       │ Time     IP*              Risk Ctry  │
-│                              │ 14:32:01 185.220.x.x●C2TF ANOMALY BOT ML:CRITICAL RU│
-│                              │ 14:31:58 103.21.x.x  TOR GEORISK ML:HIGH  CN │
+│                              │ 14:32:01 185.220.x.x C2 ANOMALY  RU  │
+│                              │ 14:31:58 103.21.x.x  TOR GEORISK  CN │
 │                              │  * click IP → session drawer        │
 │                              │  * click row → modal  j/k/Enter/b  │
 ├──────────┬───────────────────┴──────────────────────────────────────┤
