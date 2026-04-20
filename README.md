@@ -10,18 +10,18 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  🛡 AI HONEYPOT MONITOR     ⬇ Threat Report      ● LIVE            │
-├──────────┬──────────┬──────────┬──────────┬──────────┬─────────────┤
-│ Total    │ Last 24h │ Critical │ High     │ Medium   │ Unique IPs  │
-│ 14,832   │ 1,204    │ 87       │ 342      │ 891      │ 2,341       │
+│  🛡 AI HONEYPOT MONITOR     ⬇ Threat Report      ● LIVE             │
+├──────────┬──────────┬──────────┬──────────┬──────────┬──────────────┤
+│ Total    │ Last 24h │ Critical │ High     │ Medium   │ Unique IPs   │
+│ 14,832   │ 1,204    │ 87       │ 342      │ 891      │ 2,341        │
 ├──────────────────────────────┬──────────────────────────────────────┤
-│                              │ 🔍 Search    ⬇ Export CSV  [Clear]  │
+│                              │ 🔍 Search    ⬇ Export CSV  [Clear]   │
 │   🌍 World Map               ├──────────────────────────────────────┤
 │   (risk-coloured pins)       │ Time     IP*              Risk Ctry  │
 │                              │ 14:32:01 185.220.x.x C2 ANOMALY  RU  │
-│                              │ 14:31:58 103.21.x.x  TOR GEORISK  CN │
-│                              │  * click IP → session drawer        │
-│                              │  * click row → modal  j/k/Enter/b  │
+│                              │ 14:31:58 103.21.x.x TOR GEORISK  CN  │
+│                              │  * click IP → session drawer         │
+│                              │  * click row → modal  j/k/Enter/b    │
 ├──────────┬───────────────────┴──────────────────────────────────────┤
 │ Risk Pie │ Category Bar         │ 24-Hour Timeline                  │
 ├──────────┴──────────────────────┴───────────────────────────────────┤
@@ -29,44 +29,44 @@ Designed to run on a Raspberry Pi or any Ubuntu server. Ships as a multi-archite
 │  🕐 Hour-of-Day Heatmap (7×24 grid — when do attacks peak?)         │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Simulated Platforms  (toggle to enable/disable · TRAP to tarpit)   │
-│  🦙 Ollama [ON][—] 🤖 OpenAI [ON][TRAP] 🧠 Anthropic [OFF][—]     │
+│  🦙 Ollama [ON][—] 🤖 OpenAI [ON][TRAP] 🧠 Anthropic [OFF][—]       │
 ├─────────────────────────────────────────────────────────────────────┤
-│  🔍 Intelligence                                                     │
-│  Webhook Alerts: ✓ Active · 1 URL · Format: slack · CRITICAL,HIGH  │
-│  Canary Token:   sk-pot-a1b2c3d4e5f6g7h8    [Copy]                 │
+│  🔍 Intelligence                                                    │
+│  Webhook Alerts: ✓ Active · 1 URL · Format: slack · CRITICAL,HIGH   │
+│  Canary Token:   sk-pot-a1b2c3d4e5f6g7h8    [Copy]                  │
 │  Deception URL:  http://host/track/abc123    [Copy]                 │
-│  Feodo Feed:     ✓ Active · 8,234 C2 IPs   · refreshed 04:00       │
-│    Detected IPs: 185.220.x.x · 103.21.x.x  (click to open drawer) │
-│  ThreatFox Feed: ✓ Active · 12,847 IOCs    · refreshed 04:00       │
+│  Feodo Feed:     ✓ Active · 8,234 C2 IPs   · refreshed 04:00        │
+│    Detected IPs: 185.220.x.x · 103.21.x.x  (click to open drawer)   │
+│  ThreatFox Feed: ✓ Active · 12,847 IOCs    · refreshed 04:00        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  🔬 IP Session Drawer (click any IP)                                 │
-│  IP: 185.220.101.x   Hostname: exit-node.tor-relay.example.com     │
+│  🔬 IP Session Drawer (click any IP)                                │
+│  IP: 185.220.101.x   Hostname: exit-node.tor-relay.example.com      │
 │  ISP: Frantech Solutions   Country: Netherlands / Amsterdam         │
-│  AbuseIPDB: 98/100   GreyNoise: MALICIOUS — Tor exit node          │
-│  [DATACENTER] [TOR EXIT] [ThreatFox: Cobalt Strike] [C2]           │
+│  AbuseIPDB: 98/100   GreyNoise: MALICIOUS — Tor exit node           │
+│  [DATACENTER] [TOR EXIT] [ThreatFox: Cobalt Strike] [C2]            │
 ├─────────────────────────────────────────────────────────────────────┤
-│  🏆 Top Attackers                                                    │
-│  Top IPs: 1. 185.220.x.x (RU) 341 req CRITICAL  2. …             │
-│  Top Countries: 1. China 38.2%  2. Russia 21.1%  3. US 9.4%       │
+│  🏆 Top Attackers                                                   │
+│  Top IPs: 1. 185.220.x.x (RU) 341 req CRITICAL  2. …                │
+│  Top Countries: 1. China 38.2%  2. Russia 21.1%  3. US 9.4%         │
 ├─────────────────────────────────────────────────────────────────────┤
 │  🚫 Blocked IPs  [3]  Auto-block: on                                │
-│  185.220.x.x  auto: 3 criticals in 300s   2026-04-17  [Unblock]   │
+│  185.220.x.x  auto: 3 criticals in 300s   2026-04-17  [Unblock]     │
 ├─────────────────────────────────────────────────────────────────────┤
 │  ✅ Allowed IPs  [1]  Whitelisted — never logged or blocked         │
-│  192.168.1.10   my home IP   2026-04-19  [Remove]                  │
+│  192.168.1.10   my home IP   2026-04-19  [Remove]                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │  🔎 Custom Detection Rules  [2]  Operator regex patterns            │
-│  "Crypto miner"  xmrig|stratum\+  CRITICAL  [ON]  [Delete]         │
-│  Name / Pattern / Risk ▾               [Add Rule]                  │
+│  "Crypto miner"  xmrig|stratum\+  CRITICAL  [ON]  [Delete]          │
+│  Name / Pattern / Risk ▾               [Add Rule]                   │
 ├─────────────────────────────────────────────────────────────────────┤
-│  🤖 ML Intelligence  (collapsible)                                   │
-│  Model Status:  ✓ Trained · 2,341 samples · last: 2026-04-19 14:00 │
-│    Composite baseline: p10=0.08 · p50=0.21 · p90=0.54              │
+│  🤖 ML Intelligence  (collapsible)                                  │
+│  Model Status:  ✓ Trained · 2,341 samples · last: 2026-04-19 14:00  │
+│    Composite baseline: p10=0.08 · p50=0.21 · p90=0.54               │
 │  Anomaly Detection:  12 anomalies in last 24h  (Isolation Forest)   │
-│  Bot Detection:      8 high-confidence bots ≥80%  (Random Forest)  │
+│  Bot Detection:      8 high-confidence bots ≥80%  (Random Forest)   │
 │  Attack Clusters:    3 active clusters  (DBSCAN)                    │
-│    Cluster 0: 12 IPs · CRITICAL   Cluster 1: 7 IPs · HIGH          │
-│  🌍 Geo Risk: CN 89% · RU 76% · IR 71% · KP 68% · BR 55%          │
+│    Cluster 0: 12 IPs · CRITICAL   Cluster 1: 7 IPs · HIGH           │
+│  🌍 Geo Risk: CN 89% · RU 76% · IR 71% · KP 68% · BR 55%            │
 │    Top ASNs: AS4134 91% · AS1234 78%                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │  ABOUT ▾  (collapsible — built by Ozzytech · Martyn Oswald)         │
