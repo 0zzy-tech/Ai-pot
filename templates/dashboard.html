@@ -80,7 +80,7 @@
     <!-- Live request feed -->
     <div class="panel" id="feed-panel">
       <div class="panel-header">Live Request Feed
-        <a id="export-csv-btn" href="{{ admin_prefix }}/api/export/requests.csv" class="btn-reset" style="margin-left:auto; text-decoration:none; font-size:11px">⬇ Export CSV</a>
+        <button id="export-csv-btn" class="btn-reset" style="margin-left:auto; font-size:11px" onclick="exportAllCsv()">⬇ Export CSV</button>
         <button id="clear-data-btn" class="btn-reset">Clear All Data</button>
       </div>
       <div class="feed-search">

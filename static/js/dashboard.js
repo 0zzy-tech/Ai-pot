@@ -272,6 +272,10 @@
     window.location.href = `${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`;
   }
 
+  function exportAllCsv() {
+    window.location.href = `${ADMIN_PREFIX}/api/export/requests.csv`;
+  }
+
   function applyServiceUpdate(id, enabled) {
     const card  = document.querySelector(`.service-card[data-service-id="${CSS.escape(id)}"]`);
     const input = document.getElementById(`svc-toggle-${id}`);
@@ -805,27 +809,30 @@
         // Clusters card
         const clustersEl = document.getElementById('ml-clusters-body');
         if (clustersEl) {
-          if (data.trained && data.cluster_summary) {
-            const clusters = data.cluster_summary.filter(c => c.cluster_id !== -1);
-            if (clusters.length) {
-              let html = `<strong style="color:var(--risk-medium);font-size:18px">${clusters.length}</strong>` +
-                `<span style="font-size:11px;color:var(--text-muted)"> active attack cluster${clusters.length !== 1 ? 's' : ''}</span><br>`;
-              html += `<div style="margin-top:6px;font-size:11px">` +
-                clusters.slice(0, 5).map(c =>
-                  `<div>Cluster ${c.cluster_id}: <strong>${c.ip_count}</strong> IPs &bull; ` +
-                  `<span class="badge badge-${esc(c.max_risk)}">${esc(c.max_risk)}</span></div>`
-                ).join('') + `</div>`;
-              if (clusters.length > 5) html += `<div style="font-size:11px;color:var(--text-muted)">+${clusters.length - 5} more</div>`;
-              clustersEl.innerHTML = html;
-            } else {
-              clustersEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">No clusters found (all IPs unique)</span>`;
-            }
+          const clusters = Array.isArray(data.cluster_summary) ? data.cluster_summary : [];
+          if (data.trained && clusters.length) {
+            let html = `<strong style="color:var(--risk-medium);font-size:18px">${clusters.length}</strong>` +
+              `<span style="font-size:11px;color:var(--text-muted)"> active attack cluster${clusters.length !== 1 ? 's' : ''}</span><br>`;
+            html += `<div style="margin-top:6px;font-size:11px">` +
+              clusters.slice(0, 5).map(c =>
+                `<div style="padding:2px 0">Cluster ${c.cluster_id}: <strong>${c.ip_count}</strong> IP${c.ip_count !== 1 ? 's' : ''}</div>`
+              ).join('') + `</div>`;
+            if (clusters.length > 5) html += `<div style="font-size:11px;color:var(--text-muted)">+${clusters.length - 5} more</div>`;
+            if (data.noise_count) html += `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">${data.noise_count} unique (noise)</div>`;
+            clustersEl.innerHTML = html;
+          } else if (data.trained) {
+            clustersEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">No clusters found yet — all IPs appear unique</span>`;
           } else {
             clustersEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Not yet trained</span>`;
           }
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        ['ml-status-body','ml-anomaly-body','ml-bot-body','ml-clusters-body'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el && el.textContent === 'Loading…') el.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Unavailable</span>';
+        });
+      });
   }
 
   function toggleMlSection() {
@@ -1228,6 +1235,7 @@
   window.cancelIpNote         = cancelIpNote;
   window.copyDeceptionToken   = copyDeceptionToken;
   window.toggleMlSection      = toggleMlSection;
+  window.exportAllCsv         = exportAllCsv;
   window.addCustomRule        = addCustomRule;
   window.toggleCustomRule     = toggleCustomRule;
   window.deleteCustomRule     = deleteCustomRule;

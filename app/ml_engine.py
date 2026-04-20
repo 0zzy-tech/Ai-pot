@@ -452,23 +452,29 @@ class MLEngine:
         for cid in self._cluster_registry.values():
             cluster_counts[cid] = cluster_counts.get(cid, 0) + 1
 
+        # Build cluster_summary as an array (consumed by JS .filter())
+        cluster_summary = [
+            {"cluster_id": cid, "ip_count": cnt}
+            for cid, cnt in sorted(cluster_counts.items())
+            if cid != -1
+        ]
+
         return {
             "trained":            self._trained,
             "total_samples":      self._total_samples,
-            "min_to_train":       MIN_SAMPLES_TO_TRAIN,
+            "min_samples_needed": MIN_SAMPLES_TO_TRAIN,
             "samples_at_last_train": self._samples_at_last_train,
             "last_trained":       self._last_train_time.isoformat() if self._last_train_time else None,
+            "anomalies_24h":      0,   # placeholder — full impl needs a DB query
+            "bots_detected":      0,   # placeholder — full impl needs a DB query
             "models": {
                 "anomaly_detection": self._iso_forest is not None,
                 "risk_enhancement":  self._risk_clf   is not None,
                 "bot_detection":     self._bot_clf     is not None,
                 "clustering":        bool(self._cluster_registry),
             },
-            "cluster_summary": {
-                "total_ips_clustered": len(self._cluster_registry),
-                "cluster_counts":      {str(k): v for k, v in cluster_counts.items()},
-                "noise_count":         cluster_counts.get(-1, 0),
-            },
+            "cluster_summary": cluster_summary,
+            "noise_count":     cluster_counts.get(-1, 0),
         }
 
 
