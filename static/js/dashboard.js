@@ -79,9 +79,13 @@
       ? ` <span title="ML Anomaly Score: ${d.ml_anomaly_score.toFixed(2)}" style="font-size:10px;color:#d2a0ff;font-weight:700">ANOMALY</span>` : '';
     const botBadge = d.ml_bot_probability != null && d.ml_bot_probability >= 0.8
       ? ` <span title="ML Bot Probability: ${(d.ml_bot_probability * 100).toFixed(0)}%" style="font-size:10px;color:#79c0ff;font-weight:700">BOT</span>` : '';
+    const georiskBadge = !anomalyBadge && d.ml_georisk_score != null && d.ml_georisk_score >= 0.7
+      ? ` <span title="ML Geo Risk: ${d.ml_georisk_score.toFixed(2)}" style="font-size:10px;color:#f0a040;font-weight:700">GEORISK</span>` : '';
+    const compositeBadge = d.ml_threat_band && d.ml_threat_band !== 'LOW'
+      ? ` <span class="badge badge-${esc(d.ml_threat_band)}" title="ML Composite: ${(d.ml_composite_score||0).toFixed(2)}">ML:${esc(d.ml_threat_band)}</span>` : '';
     return `
       <td>${fmtTime(d.timestamp)}</td>
-      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${c2Badge}${anomalyBadge}${botBadge}${noteIndicator}</td>
+      <td class="ip-cell" title="${esc(d.ip)}" data-ip="${esc(d.ip)}">${esc(d.ip)}${abuseIndicator}${torBadge}${c2Badge}${anomalyBadge}${botBadge}${georiskBadge}${compositeBadge}${noteIndicator}</td>
       <td title="${esc(d.path)}">${esc(d.path)}</td>
       <td>${riskBadge(d.risk_level)}</td>
       <td>${catChip(d.category)}</td>
@@ -764,12 +768,16 @@
         const statusEl = document.getElementById('ml-status-body');
         if (statusEl) {
           if (data.trained) {
+            const p = data.composite_percentiles || {};
+            const pLine = (p.p50 != null)
+              ? `<br><span style="font-size:11px;color:var(--text-muted)">Composite baseline: p10=${p.p10} · p50=${p.p50} · p90=${p.p90}</span>`
+              : '';
             statusEl.innerHTML =
               `<span style="color:var(--risk-low)">✓ Models trained</span><br>` +
               `<span style="font-size:11px;color:var(--text-muted)">` +
               `Samples: <strong>${(data.total_samples||0).toLocaleString()}</strong> &bull; ` +
               `Last train: ${data.last_trained ? data.last_trained.slice(0,19).replace('T',' ') + ' UTC' : '—'}` +
-              `</span>`;
+              `</span>${pLine}`;
           } else {
             statusEl.innerHTML =
               `<span style="color:var(--text-muted)">⏳ Warming up</span><br>` +
@@ -826,9 +834,35 @@
             clustersEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Not yet trained</span>`;
           }
         }
+        // Geo risk card
+        const georiskEl = document.getElementById('ml-georisk-body');
+        if (georiskEl) {
+          const countries = Array.isArray(data.top_risky_countries) ? data.top_risky_countries : [];
+          const asns      = Array.isArray(data.top_risky_asns)      ? data.top_risky_asns      : [];
+          if (data.trained && (countries.length || asns.length)) {
+            let html = '';
+            if (countries.length) {
+              html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Top risky countries:</div>`;
+              html += countries.map(c =>
+                `<div style="font-size:11px;padding:1px 0"><strong>${esc(c.country)}</strong> — risk score ${(c.score * 100).toFixed(0)}%</div>`
+              ).join('');
+            }
+            if (asns.length) {
+              html += `<div style="font-size:11px;color:var(--text-muted);margin-top:6px;margin-bottom:4px">Top risky ASNs:</div>`;
+              html += asns.map(a =>
+                `<div style="font-size:11px;padding:1px 0"><strong>${esc(a.asn)}</strong> — risk score ${(a.score * 100).toFixed(0)}%</div>`
+              ).join('');
+            }
+            georiskEl.innerHTML = html;
+          } else if (data.trained) {
+            georiskEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">No geo data yet — geo enrichment may be disabled</span>`;
+          } else {
+            georiskEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Not yet trained</span>`;
+          }
+        }
       })
       .catch(() => {
-        ['ml-status-body','ml-anomaly-body','ml-bot-body','ml-clusters-body'].forEach(id => {
+        ['ml-status-body','ml-anomaly-body','ml-bot-body','ml-clusters-body','ml-georisk-body'].forEach(id => {
           const el = document.getElementById(id);
           if (el && el.textContent === 'Loading…') el.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Unavailable</span>';
         });

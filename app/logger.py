@@ -152,9 +152,16 @@ async def log_request(
             "is_tor":        bool(rep.get("is_tor")) if rep else False,
             "abuse_score":   rep.get("abuse_score", 0) if rep else 0,
             "is_hosting":    bool(geo.get("hosting")) if geo else False,
+            "threatfox_hit": bool(threatfox_hit),
             "category":      category,
+            "country":       geo["country"] if geo else None,
+            "asn":           geo["asn"]     if geo else None,
         })
         ml_session_scores = await _ml.score_session_async(ip)
+        ml_georisk = _ml.score_geo(
+            geo["country"] if geo else None,
+            geo["asn"]     if geo else None,
+        )
 
         record = {
             "timestamp":        datetime.now(timezone.utc).isoformat(),
@@ -250,6 +257,9 @@ async def log_request(
             "ml_risk_score":            ml_request_scores.get("risk_score"),
             "ml_bot_probability":       ml_session_scores.get("bot_probability"),
             "ml_cluster_id":            ml_session_scores.get("cluster_id"),
+            "ml_georisk_score":         ml_georisk,
+            "ml_composite_score":       ml_request_scores.get("composite_score"),
+            "ml_threat_band":           ml_request_scores.get("threat_band"),
         }
         await manager.broadcast({"type": "new_request", "data": broadcast_data})
 
