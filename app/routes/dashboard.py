@@ -223,7 +223,7 @@ async def api_export_requests_json(
     )
     return StreamingResponse(
         stream_requests_json(risk=risk, category=category, ip=ip, since=since, limit=limit),
-        media_type="application/json",
+        media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
