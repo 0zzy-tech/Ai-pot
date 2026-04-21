@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import secrets
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -52,6 +53,10 @@ router = APIRouter(prefix=Config.ADMIN_PREFIX)
 templates = Jinja2Templates(directory="templates")
 security = HTTPBasic()
 
+# Short-lived download tokens: {token: expiry_timestamp}
+_download_tokens: dict[str, float] = {}
+_TOKEN_TTL = 60  # seconds
+
 
 def _check_auth(credentials: HTTPBasicCredentials = Depends(security)):
     correct_user = secrets.compare_digest(
@@ -69,6 +74,40 @@ def _check_auth(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials.username
 
 
+def _consume_download_token(token: str) -> bool:
+    now = time.time()
+    expired = [t for t, exp in _download_tokens.items() if exp < now]
+    for t in expired:
+        _download_tokens.pop(t, None)
+    if _download_tokens.get(token, 0) >= now:
+        _download_tokens.pop(token)  # one-time use
+        return True
+    return False
+
+
+async def _check_export_auth(request: Request, token: Optional[str] = Query(None)) -> str:
+    """Accept either a one-time download token OR HTTP Basic Auth."""
+    if token and _consume_download_token(token):
+        return "token"
+    # Manual Basic Auth check so we can fall through without a 401 browser dialog
+    import base64
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Basic "):
+        try:
+            creds = base64.b64decode(auth[6:]).decode()
+            username, password = creds.split(":", 1)
+            if secrets.compare_digest(username, Config.ADMIN_USERNAME) and \
+               secrets.compare_digest(password, Config.ADMIN_PASSWORD):
+                return username
+        except Exception:
+            pass
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+        headers={"WWW-Authenticate": "Basic"},
+    )
+
+
 # ── Dashboard HTML ─────────────────────────────────────────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
@@ -82,6 +121,16 @@ async def dashboard(request: Request, _: str = Depends(_check_auth)):
             "ws_token":     Config.WS_TOKEN,
         },
     )
+
+
+# ── Download token ────────────────────────────────────────────────────────────
+
+@router.get("/api/download-token")
+async def api_download_token(_: str = Depends(_check_auth)):
+    """Issue a one-time, 60-second download token for unauthenticated export URLs."""
+    token = secrets.token_urlsafe(32)
+    _download_tokens[token] = time.time() + _TOKEN_TTL
+    return JSONResponse(content={"token": token})
 
 
 # ── Request data ───────────────────────────────────────────────────────────────
@@ -134,7 +183,7 @@ async def api_clear_requests(_: str = Depends(_check_auth)):
 
 
 @router.get("/api/export/{service_id}.csv")
-async def export_service_csv(service_id: str, _: str = Depends(_check_auth)):
+async def export_service_csv(service_id: str, request: Request, _: str = Depends(_check_export_auth)):
     """Download all requests for a specific honeypot service as a CSV file."""
     if service_id not in service_registry.SERVICES:
         raise HTTPException(status_code=404, detail=f"Unknown service: {service_id!r}")
@@ -492,12 +541,13 @@ async def api_c2_hits(_: str = Depends(_check_auth)):
 
 @router.get("/api/export/requests.csv")
 async def api_export_requests_csv(
+    request:  Request,
     risk:     Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     ip:       Optional[str] = Query(None),
     since:    Optional[str] = Query(None),
     limit:    int            = Query(50000, ge=1, le=500000),
-    _: str = Depends(_check_auth),
+    _: str = Depends(_check_export_auth),
 ):
     """Stream all (or filtered) requests as a CSV download."""
     filename = (
@@ -513,12 +563,13 @@ async def api_export_requests_csv(
 
 @router.get("/api/export/requests.json")
 async def api_export_requests_json(
+    request:  Request,
     risk:     Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     ip:       Optional[str] = Query(None),
     since:    Optional[str] = Query(None),
     limit:    int            = Query(50000, ge=1, le=500000),
-    _: str = Depends(_check_auth),
+    _: str = Depends(_check_export_auth),
 ):
     """Stream all (or filtered) requests as a JSON array download."""
     filename = (

@@ -270,33 +270,26 @@
     });
   }
 
-  async function _fetchDownload(url, filename) {
-    const res = await fetch(url, { credentials: 'include' });
+  async function _tokenDownload(url) {
+    // Get a one-time download token (fetch sends cached Basic Auth credentials).
+    const res = await fetch(`${ADMIN_PREFIX}/api/download-token`, { credentials: 'include' });
     if (!res.ok) { alert(`Export failed: ${res.status} ${res.statusText}`); return; }
-    const blob = await res.blob();
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: filename,
-    });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(a.href);
+    const { token } = await res.json();
+    // Navigate to the export URL with the token — no auth dialog, triggers file download.
+    const sep = url.includes('?') ? '&' : '?';
+    window.location.href = `${url}${sep}token=${encodeURIComponent(token)}`;
   }
 
   function exportCsv(serviceId) {
-    _fetchDownload(
-      `${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`,
-      `honeypot_${serviceId}.csv`
-    );
+    _tokenDownload(`${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`);
   }
 
   function exportAllCsv() {
-    _fetchDownload(`${ADMIN_PREFIX}/api/export/requests.csv`, 'honeypot_requests.csv');
+    _tokenDownload(`${ADMIN_PREFIX}/api/export/requests.csv`);
   }
 
   function exportAllJson() {
-    _fetchDownload(`${ADMIN_PREFIX}/api/export/requests.json`, 'honeypot_requests.json');
+    _tokenDownload(`${ADMIN_PREFIX}/api/export/requests.json`);
   }
 
   function applyServiceUpdate(id, enabled) {
