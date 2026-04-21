@@ -182,6 +182,52 @@ async def api_clear_requests(_: str = Depends(_check_auth)):
     return JSONResponse(content={"cleared": True})
 
 
+# ── Full CSV / JSON export (must be registered BEFORE the {service_id} route) ──
+
+@router.get("/api/export/requests.csv")
+async def api_export_requests_csv(
+    request:  Request,
+    risk:     Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    ip:       Optional[str] = Query(None),
+    since:    Optional[str] = Query(None),
+    limit:    int            = Query(50000, ge=1, le=500000),
+    _: str = Depends(_check_export_auth),
+):
+    """Stream all (or filtered) requests as a CSV download."""
+    filename = (
+        f"honeypot_requests_"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    return StreamingResponse(
+        stream_requests_csv(risk=risk, category=category, ip=ip, since=since, limit=limit),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/api/export/requests.json")
+async def api_export_requests_json(
+    request:  Request,
+    risk:     Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    ip:       Optional[str] = Query(None),
+    since:    Optional[str] = Query(None),
+    limit:    int            = Query(50000, ge=1, le=500000),
+    _: str = Depends(_check_export_auth),
+):
+    """Stream all (or filtered) requests as a JSON array download."""
+    filename = (
+        f"honeypot_requests_"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    )
+    return StreamingResponse(
+        stream_requests_json(risk=risk, category=category, ip=ip, since=since, limit=limit),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/api/export/{service_id}.csv")
 async def export_service_csv(service_id: str, request: Request, _: str = Depends(_check_export_auth)):
     """Download all requests for a specific honeypot service as a CSV file."""
@@ -535,52 +581,6 @@ async def api_c2_hits(_: str = Depends(_check_auth)):
     """IPs seen in requests that matched the Feodo C2 feed."""
     from app.database import get_c2_hits
     return JSONResponse(content=await get_c2_hits())
-
-
-# ── Full CSV export ───────────────────────────────────────────────────────────
-
-@router.get("/api/export/requests.csv")
-async def api_export_requests_csv(
-    request:  Request,
-    risk:     Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
-    ip:       Optional[str] = Query(None),
-    since:    Optional[str] = Query(None),
-    limit:    int            = Query(50000, ge=1, le=500000),
-    _: str = Depends(_check_export_auth),
-):
-    """Stream all (or filtered) requests as a CSV download."""
-    filename = (
-        f"honeypot_requests_"
-        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
-    )
-    return StreamingResponse(
-        stream_requests_csv(risk=risk, category=category, ip=ip, since=since, limit=limit),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get("/api/export/requests.json")
-async def api_export_requests_json(
-    request:  Request,
-    risk:     Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
-    ip:       Optional[str] = Query(None),
-    since:    Optional[str] = Query(None),
-    limit:    int            = Query(50000, ge=1, le=500000),
-    _: str = Depends(_check_export_auth),
-):
-    """Stream all (or filtered) requests as a JSON array download."""
-    filename = (
-        f"honeypot_requests_"
-        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
-    )
-    return StreamingResponse(
-        stream_requests_json(risk=risk, category=category, ip=ip, since=since, limit=limit),
-        media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 # ── Intelligence charts ───────────────────────────────────────────────────────
