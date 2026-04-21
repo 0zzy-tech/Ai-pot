@@ -820,6 +820,70 @@ CSV_FIELDNAMES = [
 ]
 
 
+async def stream_requests_json(
+    risk: Optional[str] = None,
+    category: Optional[str] = None,
+    ip: Optional[str] = None,
+    since: Optional[str] = None,
+    limit: int = 50000,
+) -> AsyncIterator[str]:
+    """Async generator that yields a JSON array of request objects for streaming export."""
+    conditions: list[str] = []
+    params: list = []
+    if risk:
+        conditions.append("risk_level = ?")
+        params.append(risk.upper())
+    if category:
+        conditions.append("category = ?")
+        params.append(category)
+    if ip:
+        conditions.append("ip = ?")
+        params.append(ip)
+    if since:
+        conditions.append("timestamp >= ?")
+        params.append(since)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    params.append(limit)
+
+    yield "["
+    first = True
+    async with get_db() as db:
+        cur = await db.execute(
+            f"""
+            SELECT id, timestamp, ip, method, path, category, risk_level,
+                   country, city, user_agent, flagged_patterns, body
+            FROM requests
+            {where}
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            params,
+        )
+        while True:
+            rows = await cur.fetchmany(500)
+            if not rows:
+                break
+            for row in rows:
+                obj = {
+                    "id": row[0],
+                    "timestamp": row[1],
+                    "ip": row[2],
+                    "method": row[3],
+                    "path": row[4],
+                    "category": row[5],
+                    "risk_level": row[6],
+                    "country": row[7],
+                    "city": row[8],
+                    "user_agent": row[9],
+                    "flagged_patterns": row[10],
+                    "body_snippet": (row[11] or "")[:200],
+                }
+                prefix = "" if first else ","
+                first = False
+                yield prefix + json.dumps(obj)
+    yield "]"
+
+
 async def stream_requests_csv(
     risk: Optional[str] = None,
     category: Optional[str] = None,

@@ -270,14 +270,33 @@
     });
   }
 
+  async function _fetchDownload(url, filename) {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) { alert(`Export failed: ${res.status} ${res.statusText}`); return; }
+    const blob = await res.blob();
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: filename,
+    });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
   function exportCsv(serviceId) {
-    // Use navigation (not fetch) so the browser sends cached Basic Auth credentials.
-    // Content-Disposition: attachment on the server side triggers a download without leaving the page.
-    window.location.href = `${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`;
+    _fetchDownload(
+      `${ADMIN_PREFIX}/api/export/${encodeURIComponent(serviceId)}.csv`,
+      `honeypot_${serviceId}.csv`
+    );
   }
 
   function exportAllCsv() {
-    window.location.href = `${ADMIN_PREFIX}/api/export/requests.csv`;
+    _fetchDownload(`${ADMIN_PREFIX}/api/export/requests.csv`, 'honeypot_requests.csv');
+  }
+
+  function exportAllJson() {
+    _fetchDownload(`${ADMIN_PREFIX}/api/export/requests.json`, 'honeypot_requests.json');
   }
 
   function applyServiceUpdate(id, enabled) {
