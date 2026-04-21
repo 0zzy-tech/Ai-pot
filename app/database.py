@@ -812,7 +812,55 @@ async def purge_old_requests(max_age_days: int) -> int:
             return cur.rowcount
 
 
-# ── CSV export ─────────────────────────────────────────────────────────────────
+# ── Bulk export ────────────────────────────────────────────────────────────────
+
+async def get_all_requests_for_export(
+    risk: Optional[str] = None,
+    category: Optional[str] = None,
+    ip: Optional[str] = None,
+    since: Optional[str] = None,
+    limit: int = 50000,
+) -> list:
+    conditions: list[str] = []
+    params: list = []
+    if risk:
+        conditions.append("risk_level = ?")
+        params.append(risk.upper())
+    if category:
+        conditions.append("category = ?")
+        params.append(category)
+    if ip:
+        conditions.append("ip = ?")
+        params.append(ip)
+    if since:
+        conditions.append("timestamp >= ?")
+        params.append(since)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    params.append(limit)
+    async with get_db() as db:
+        cur = await db.execute(
+            f"""
+            SELECT id, timestamp, ip, method, path, category, risk_level,
+                   country, city, user_agent, flagged_patterns, body
+            FROM requests {where}
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            params,
+        )
+        rows = await cur.fetchall()
+    return [
+        {
+            "id": r[0], "timestamp": r[1], "ip": r[2], "method": r[3],
+            "path": r[4], "category": r[5], "risk_level": r[6],
+            "country": r[7], "city": r[8], "user_agent": r[9],
+            "flagged_patterns": r[10], "body_snippet": (r[11] or "")[:200],
+        }
+        for r in rows
+    ]
+
+
+# ── CSV export (streaming, kept for reference) ─────────────────────────────────
 
 CSV_FIELDNAMES = [
     "id", "timestamp", "ip", "method", "path", "category", "risk_level",

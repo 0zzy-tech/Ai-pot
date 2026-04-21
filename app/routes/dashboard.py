@@ -43,8 +43,7 @@ from app.database import (
     get_threat_report_data,
     get_weekly_trend,
     remove_allowed_ip,
-    stream_requests_csv,
-    stream_requests_json,
+    get_all_requests_for_export,
     update_custom_rule,
 )
 from config import Config
@@ -194,13 +193,17 @@ async def api_export_requests_csv(
     limit:    int            = Query(50000, ge=1, le=500000),
     _: str = Depends(_check_export_auth),
 ):
-    """Stream all (or filtered) requests as a CSV download."""
-    filename = (
-        f"honeypot_requests_"
-        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
-    )
-    return StreamingResponse(
-        stream_requests_csv(risk=risk, category=category, ip=ip, since=since, limit=limit),
+    rows = await get_all_requests_for_export(risk=risk, category=category, ip=ip, since=since, limit=limit)
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=[
+        "id", "timestamp", "ip", "method", "path", "category", "risk_level",
+        "country", "city", "user_agent", "flagged_patterns", "body_snippet",
+    ])
+    writer.writeheader()
+    writer.writerows(rows)
+    filename = f"honeypot_requests_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -216,13 +219,10 @@ async def api_export_requests_json(
     limit:    int            = Query(50000, ge=1, le=500000),
     _: str = Depends(_check_export_auth),
 ):
-    """Stream all (or filtered) requests as a JSON array download."""
-    filename = (
-        f"honeypot_requests_"
-        f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
-    )
-    return StreamingResponse(
-        stream_requests_json(risk=risk, category=category, ip=ip, since=since, limit=limit),
+    rows = await get_all_requests_for_export(risk=risk, category=category, ip=ip, since=since, limit=limit)
+    filename = f"honeypot_requests_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    return Response(
+        content=json.dumps(rows).encode("utf-8"),
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
